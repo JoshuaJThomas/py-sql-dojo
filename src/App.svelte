@@ -160,8 +160,10 @@
     pyResult = { success: false, stdout: '', error: '', checksPassed: false, checksResults: [] };
     sqlResult = { success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [] };
 
-    if (lang === 'python' && activeTabRight === 'schema') {
+    if (lang === 'python') {
       activeTabRight = 'console';
+    } else if (lang === 'sql') {
+      activeTabRight = 'schema';
     }
 
     // Auto-initialize SQL schema so the browser/schema isn't empty on load
