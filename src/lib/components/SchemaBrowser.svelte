@@ -37,7 +37,7 @@
                     {/if}
                     <span class="col-name" class:pk-name={col.pk}>{col.name}</span>
                   </div>
-                  <span class="col-type">{col.type.toLowerCase()}</span>
+                  <span class="col-type col-type-{col.type.toLowerCase()}">{col.type}</span>
                 </div>
               {/each}
             </div>
@@ -174,6 +174,35 @@
 
   .col-type {
     font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid transparent;
+  }
+
+  .col-type-integer {
+    background: rgba(59, 130, 246, 0.08);
+    border-color: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+  }
+
+  .col-type-text {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+  }
+
+  .col-type-real {
+    background: rgba(236, 72, 153, 0.08);
+    border-color: rgba(236, 72, 153, 0.2);
+    color: #ec4899;
+  }
+
+  .col-type-null {
+    background: rgba(100, 116, 139, 0.08);
+    border-color: rgba(100, 116, 139, 0.2);
     color: #64748b;
   }
 </style>

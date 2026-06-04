@@ -38,13 +38,21 @@
     Eye, 
     Database, 
     Compass, 
-    Terminal 
+    Terminal,
+    ChevronLeft,
+    ChevronRight
   } from 'lucide-svelte';
 
   // State
   let activeView = $state('dashboard'); // 'dashboard' | 'playground'
   let activeLang = $derived($language);
   let isSandboxMode = $state(false);
+
+  // Layout & Editor States
+  let isLeftPanelCollapsed = $state(false);
+  let isRightPanelCollapsed = $state(false);
+  let editorFontSize = $state(14); // 12 | 14 | 16 | 18
+  let editorWordWrap = $state(true);
 
   // Active exercises
   let activePyIdx = $derived($pythonChallengeIndex);
@@ -321,101 +329,156 @@
       </div>
 
       <!-- Main Panels Workspace split -->
-      <div class="workspace-grid">
+      <div 
+        class="workspace-grid" 
+        style="grid-template-columns: {isLeftPanelCollapsed ? '48px' : '320px'} 1fr {isRightPanelCollapsed ? '48px' : '1fr'};"
+      >
         <!-- Panel 1: Prompt details -->
-        <section class="workspace-panel panel-left">
-          <div class="panel-section padding-box">
-            <h2 class="subhead">Instructions</h2>
-            <div class="prompt-text">
-              <p>{currentChallenge.prompt}</p>
-            </div>
-
-            <!-- Hint Section -->
-            <div class="expansion-block">
-              <button 
-                class="expansion-header" 
-                onclick={() => showHint = !showHint}
-              >
-                <HelpCircle size={14} class="header-icon" />
-                <span>Need a Hint?</span>
-                <span class="caret" class:open={showHint}>▼</span>
+        {#if isLeftPanelCollapsed}
+          <section class="workspace-panel panel-left collapsed">
+            <button class="panel-toggle-btn expand-btn" onclick={() => isLeftPanelCollapsed = false} title="Expand Instructions">
+              <ChevronRight size={16} />
+            </button>
+          </section>
+        {:else}
+          <section class="workspace-panel panel-left">
+            <div class="panel-header-row">
+              <h2 class="subhead" style="margin: 0;">Instructions</h2>
+              <button class="panel-toggle-btn" onclick={() => isLeftPanelCollapsed = true} title="Collapse Instructions">
+                <ChevronLeft size={14} />
               </button>
-              {#if showHint}
-                <div class="expansion-content">
-                  <p>{currentChallenge.hint}</p>
-                </div>
-              {/if}
             </div>
+            <div class="panel-section padding-box">
+              <div class="prompt-text">
+                <p>{currentChallenge.prompt}</p>
+              </div>
 
-            <!-- Solution Section -->
-            <div class="expansion-block solution-block">
-              <button 
-                class="expansion-header" 
-                onclick={() => showSolution = !showSolution}
-              >
-                <Eye size={14} class="header-icon" />
-                <span>Show Solution</span>
-                <span class="caret" class:open={showSolution}>▼</span>
-              </button>
-              {#if showSolution}
-                <div class="expansion-content solution-content">
-                  <pre class="solution-code"><code>{currentChallenge.solution}</code></pre>
-                </div>
-              {/if}
+              <!-- Hint Section -->
+              <div class="expansion-block">
+                <button 
+                  class="expansion-header" 
+                  onclick={() => showHint = !showHint}
+                >
+                  <HelpCircle size={14} class="header-icon" />
+                  <span>Need a Hint?</span>
+                  <span class="caret" class:open={showHint}>▼</span>
+                </button>
+                {#if showHint}
+                  <div class="expansion-content">
+                    <p>{currentChallenge.hint}</p>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Solution Section -->
+              <div class="expansion-block solution-block">
+                <button 
+                  class="expansion-header" 
+                  onclick={() => showSolution = !showSolution}
+                >
+                  <Eye size={14} class="header-icon" />
+                  <span>Show Solution</span>
+                  <span class="caret" class:open={showSolution}>▼</span>
+                </button>
+                {#if showSolution}
+                  <div class="expansion-content solution-content">
+                    <pre class="solution-code"><code>{currentChallenge.solution}</code></pre>
+                  </div>
+                {/if}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        {/if}
 
         <!-- Panel 2: Code Editor -->
         <section class="workspace-panel panel-center">
-          <Editor 
-            bind:value={code} 
-            language={activeLang} 
-            onChange={handleCodeChange}
-          />
+          <div class="editor-header-bar">
+            <span class="editor-title">Editor Workspace</span>
+            <div class="editor-controls">
+              <!-- Font Sizing -->
+              <div class="font-controls">
+                <button class="editor-ctrl-btn" onclick={() => editorFontSize = Math.max(12, editorFontSize - 2)} title="Decrease font size">-</button>
+                <span class="font-size-val">{editorFontSize}px</span>
+                <button class="editor-ctrl-btn" onclick={() => editorFontSize = Math.min(18, editorFontSize + 2)} title="Increase font size">+</button>
+              </div>
+              
+              <!-- Wrap toggle -->
+              <button 
+                class="editor-ctrl-btn wrap-btn" 
+                class:active={editorWordWrap} 
+                onclick={() => editorWordWrap = !editorWordWrap} 
+                title="Toggle line wrapping"
+              >
+                Wrap
+              </button>
+            </div>
+          </div>
+          
+          <div class="editor-container-wrap">
+            <Editor 
+              bind:value={code} 
+              language={activeLang} 
+              onChange={handleCodeChange}
+              fontSize={editorFontSize}
+              wordWrap={editorWordWrap}
+            />
+          </div>
         </section>
 
         <!-- Panel 3: Terminal Console and DB Schema tabbed -->
-        <section class="workspace-panel panel-right">
-          <div class="panel-right-tabs">
-            <button 
-              class="right-tab" 
-              class:active={activeTabRight === 'console'}
-              onclick={() => activeTabRight = 'console'}
-            >
-              <Terminal size={14} />
-              <span>Console</span>
+        {#if isRightPanelCollapsed}
+          <section class="workspace-panel panel-right collapsed">
+            <button class="panel-toggle-btn expand-btn" onclick={() => isRightPanelCollapsed = false} title="Expand Console">
+              <ChevronLeft size={16} />
             </button>
-
-            {#if activeLang === 'sql'}
+          </section>
+        {:else}
+          <section class="workspace-panel panel-right">
+            <div class="panel-right-tabs">
               <button 
                 class="right-tab" 
-                class:active={activeTabRight === 'schema'}
-                onclick={() => activeTabRight = 'schema'}
+                class:active={activeTabRight === 'console'}
+                onclick={() => activeTabRight = 'console'}
               >
-                <Database size={14} />
-                <span>Database Schema</span>
+                <Terminal size={14} />
+                <span>Console</span>
               </button>
-            {/if}
-          </div>
 
-          <div class="panel-right-content">
-            {#if activeTabRight === 'console'}
-              <Console 
-                type={activeLang}
-                stdout={pyResult.stdout}
-                error={activeLang === 'python' ? pyResult.error : sqlResult.error}
-                checksPassed={activeLang === 'python' ? pyResult.checksPassed : sqlResult.checksPassed}
-                checksResults={activeLang === 'python' ? pyResult.checksResults : sqlResult.checksResults}
-                queryResult={sqlResult.result}
-                dbState={sqlResult.dbState}
-                hasRun={hasRun}
-              />
-            {:else}
-              <SchemaBrowser schema={sqlResult.schema || {}} dbState={sqlResult.dbState || {}} />
-            {/if}
-          </div>
-        </section>
+              {#if activeLang === 'sql'}
+                <button 
+                  class="right-tab" 
+                  class:active={activeTabRight === 'schema'}
+                  onclick={() => activeTabRight = 'schema'}
+                >
+                  <Database size={14} />
+                  <span>Database Schema</span>
+                </button>
+              {/if}
+
+              <!-- Collapse trigger at far right of tabs -->
+              <button class="panel-toggle-btn right-collapse-btn" onclick={() => isRightPanelCollapsed = true} title="Collapse Console">
+                <ChevronRight size={14} />
+              </button>
+            </div>
+
+            <div class="panel-right-content">
+              {#if activeTabRight === 'console'}
+                <Console 
+                  type={activeLang}
+                  stdout={pyResult.stdout}
+                  error={activeLang === 'python' ? pyResult.error : sqlResult.error}
+                  checksPassed={activeLang === 'python' ? pyResult.checksPassed : sqlResult.checksPassed}
+                  checksResults={activeLang === 'python' ? pyResult.checksResults : sqlResult.checksResults}
+                  queryResult={sqlResult.result}
+                  dbState={sqlResult.dbState}
+                  hasRun={hasRun}
+                />
+              {:else}
+                <SchemaBrowser schema={sqlResult.schema || {}} dbState={sqlResult.dbState || {}} />
+              {/if}
+            </div>
+          </section>
+        {/if}
       </div>
     </main>
   {/if}
@@ -777,5 +840,158 @@
     font-family: var(--font-mono);
     font-size: 12px;
     color: #10b981;
+  }
+
+  /* Collapsible panels and sidebar style overrides */
+  .workspace-panel.collapsed {
+    background: #0d0d11;
+    border-right: 1px solid #1a1a24;
+    border-left: 1px solid #1a1a24;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 12px 0;
+  }
+
+  .panel-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #111116;
+    border-bottom: 1px solid #1a1a24;
+    width: 100%;
+  }
+
+  .panel-toggle-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #64748b;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .panel-toggle-btn:hover {
+    background: #1e1e2d;
+    color: #ffffff;
+    border-color: #2b2b3d;
+  }
+
+  .panel-toggle-btn.expand-btn {
+    width: 32px;
+    height: 32px;
+    background: #111116;
+    border: 1px solid #1d1d29;
+    color: #10b981;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
+  }
+
+  .panel-toggle-btn.expand-btn:hover {
+    background: #10b981;
+    color: #000000;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+  }
+
+  .right-collapse-btn {
+    margin-left: auto;
+    margin-right: 8px;
+  }
+
+  /* Editor Header bar and scaling styles */
+  .editor-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background: #111116;
+    border: 1px solid #1a1a24;
+    border-bottom: none;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+
+  .editor-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .editor-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .font-controls {
+    display: flex;
+    align-items: center;
+    background: #09090c;
+    border: 1px solid #1a1a24;
+    border-radius: var(--radius-xs);
+    padding: 2px;
+  }
+
+  .editor-ctrl-btn {
+    background: transparent;
+    border: none;
+    color: #cbd5e1;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    transition: all 0.2s;
+  }
+
+  .editor-ctrl-btn:hover {
+    background: #1e1e2d;
+    color: #ffffff;
+  }
+
+  .font-size-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #64748b;
+    padding: 0 6px;
+    min-width: 32px;
+    text-align: center;
+  }
+
+  .editor-ctrl-btn.wrap-btn {
+    background: #09090c;
+    border: 1px solid #1a1a24;
+    color: #64748b;
+    padding: 2px 8px;
+    width: auto;
+    height: auto;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .editor-ctrl-btn.wrap-btn.active {
+    border-color: rgba(16, 185, 129, 0.25);
+    background: rgba(16, 185, 129, 0.05);
+    color: #10b981;
+  }
+
+  .editor-container-wrap {
+    flex: 1;
+    overflow: hidden;
   }
 </style>
