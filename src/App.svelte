@@ -15,10 +15,13 @@
     userSqlCode, 
     completedChallenges, 
     completeChallenge,
-    level
+    level,
+    xp
   } from './lib/stores/dojo-store.js';
   import { get } from 'svelte/store';
   import { playSuccessChime, playLevelUpFanfare, playErrorBuzz } from './lib/utils/soundscapes.js';
+  import { parseMarkdown } from './lib/utils/markdown.js';
+  import { convertCsvToSql } from './lib/utils/csv-parser.js';
 
   // Import exercise data
   import { pythonExercises } from './lib/data/python-exercises.js';
@@ -40,7 +43,12 @@
     Compass, 
     Terminal,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    Trophy,
+    Code,
+    Star,
+    Shield,
+    Flame
   } from 'lucide-svelte';
 
   // State
@@ -108,6 +116,22 @@
   let activeTabRight = $state('console'); // 'console' | 'schema'
   let showConfetti = $state(false);
 
+  // Sandbox Custom Seeding and Data Importer States
+  let customDdlSeed = $state(localStorage.getItem('dojo_custom_sandbox_seed') || '');
+  let showDdlPanel = $state(false);
+  let showCsvPanel = $state(false);
+  let showHistoryPanel = $state(false);
+  let csvTableName = $state('');
+  let csvDataInput = $state('');
+
+  let sandboxHistoryPy = $state(JSON.parse(localStorage.getItem('dojo_sandbox_history_python') || '[]'));
+  let sandboxHistorySql = $state(JSON.parse(localStorage.getItem('dojo_sandbox_history_sql') || '[]'));
+
+  // Level Up and Achievement Toast notifications
+  let showLevelUpModal = $state(false);
+  let levelUpVal = $state(1);
+  let activeBadgeUnlock = $state(null);
+
   // Watch for challenge/language/sandbox updates and reset console/results/tab views
   $effect(() => {
     const id = currentChallenge.id;
@@ -126,12 +150,23 @@
 
     // Auto-initialize SQL schema so the browser/schema isn't empty on load
     if (lang === 'sql') {
-      runSqlQuery(sqlDbSeed, "").then(outcome => {
+      const seedToUse = (isSandboxMode && customDdlSeed.trim()) ? customDdlSeed : sqlDbSeed;
+      runSqlQuery(seedToUse, "").then(outcome => {
         if (outcome.success) {
           sqlResult.schema = outcome.schema;
           sqlResult.dbState = outcome.dbState;
         }
       });
+    }
+  });
+
+  // Automated Backup Reminder when XP balance increments by 300
+  $effect(() => {
+    const currentXp = $xp;
+    const lastBackupXp = Number(localStorage.getItem('dojo_last_backup_xp') || '0');
+    if (currentXp - lastBackupXp >= 300) {
+      alert(`🛡️ Dojo Reminder: You have gained ${currentXp - lastBackupXp} XP since your last backup! Don't forget to export your progress file under Settings in the Dashboard.`);
+      localStorage.setItem('dojo_last_backup_xp', String(currentXp));
     }
   });
 
@@ -189,10 +224,115 @@
     }, 3000);
   }
 
+  // Sandbox History tracking helpers
+  function recordSandboxRun(lang, codeStr) {
+    if (!codeStr || !codeStr.trim()) return;
+    let history = lang === 'python' ? sandboxHistoryPy : sandboxHistorySql;
+    
+    // Remove if already exists to place at front
+    history = history.filter(item => item !== codeStr);
+    history.unshift(codeStr);
+    
+    // Cap at 5
+    if (history.length > 5) history = history.slice(0, 5);
+    
+    if (lang === 'python') {
+      sandboxHistoryPy = history;
+      localStorage.setItem('dojo_sandbox_history_python', JSON.stringify(history));
+    } else {
+      sandboxHistorySql = history;
+      localStorage.setItem('dojo_sandbox_history_sql', JSON.stringify(history));
+    }
+  }
+
+  function restoreHistoryItem(itemCode) {
+    if (confirm("Replace your current editor code with this version from run history?")) {
+      handleCodeChange(itemCode);
+    }
+  }
+
+  // Custom DB Seed application
+  async function applyCustomDdl() {
+    localStorage.setItem('dojo_custom_sandbox_seed', customDdlSeed);
+    alert("Custom DDL schema seed saved! Refreshing database schema browser...");
+    const outcome = await runSqlQuery(customDdlSeed || sqlDbSeed, "SELECT 1;");
+    if (outcome.success) {
+      sqlResult.schema = outcome.schema;
+      sqlResult.dbState = outcome.dbState;
+      activeTabRight = 'schema';
+    } else {
+      alert("Error executing DDL seed: " + outcome.error);
+    }
+  }
+
+  function resetDdlToDefault() {
+    if (confirm("Restore standard SQLite database schema? This will clear your custom seeds and tables.")) {
+      customDdlSeed = "";
+      localStorage.removeItem('dojo_custom_sandbox_seed');
+      runSqlQuery(sqlDbSeed, "SELECT 1;").then(outcome => {
+        if (outcome.success) {
+          sqlResult.schema = outcome.schema;
+          sqlResult.dbState = outcome.dbState;
+        }
+      });
+      alert("Standard SQL schema restored!");
+    }
+  }
+
+  // CSV Data parsing
+  function importCsvTable() {
+    if (!csvTableName.trim() || !csvDataInput.trim()) {
+      alert("Please specify a table name and enter some CSV data.");
+      return;
+    }
+    const sqlStatements = convertCsvToSql(csvTableName, csvDataInput);
+    if (!sqlStatements) {
+      alert("Failed to parse CSV! Check columns and formatting.");
+      return;
+    }
+    
+    // Append to existing custom DDL (or initialize it)
+    const currentSeed = customDdlSeed.trim() ? customDdlSeed : sqlDbSeed;
+    customDdlSeed = currentSeed + "\n\n" + sqlStatements;
+    localStorage.setItem('dojo_custom_sandbox_seed', customDdlSeed);
+    
+    // Reset inputs
+    csvTableName = "";
+    csvDataInput = "";
+    
+    // Execute
+    applyCustomDdl();
+  }
+
+  // Show Toast badge unlocked
+  function showBadgeUnlockNotification(badgeIds) {
+    const id = badgeIds[0];
+    const badgeMap = {
+      'first-blood': { name: 'First Blood', desc: 'Complete your first challenge in the Dojo.', color: '#f59e0b' },
+      'pythonista': { name: 'Pythonista', desc: 'Complete at least 10 Python challenges.', color: '#3b82f6' },
+      'sql-maestro': { name: 'SQL Maestro', desc: 'Complete at least 10 SQL challenges.', color: '#10b981' },
+      'ml-pioneer': { name: 'ML Pioneer', desc: 'Complete at least 5 NumPy/Pandas challenges.', color: '#8b5cf6' },
+      'svm-champion': { name: 'SVM Champion', desc: 'Complete the SVM model training challenge.', color: '#ec4899' },
+      'dedicated-scholar': { name: 'Dedicated Scholar', desc: 'Maintain a daily streak of 3 days or more.', color: '#f97316' },
+      'level-5-mastery': { name: 'Level 5 Mastery', desc: 'Reach Mastery Level 5 or higher.', color: '#eab308' }
+    };
+    const details = badgeMap[id];
+    if (details) {
+      activeBadgeUnlock = { id, ...details };
+      setTimeout(() => {
+        activeBadgeUnlock = null;
+      }, 5000);
+    }
+  }
+
   // Execute active task
   async function runCode() {
     isRunning = true;
     hasRun = true;
+
+    if (isSandboxMode) {
+      recordSandboxRun(activeLang, code);
+    }
 
     if (activeLang === 'python') {
       const oldLevel = get(level);
@@ -200,11 +340,16 @@
       pyResult = outcome;
 
       if (!isSandboxMode && outcome.success && outcome.checksPassed) {
-        completeChallenge(currentChallenge.id, currentChallenge.difficulty);
+        const newlyUnlocked = completeChallenge(currentChallenge.id, currentChallenge.difficulty);
+        if (newlyUnlocked && newlyUnlocked.length > 0) {
+          showBadgeUnlockNotification(newlyUnlocked);
+        }
         const newLevel = get(level);
         if (newLevel > oldLevel) {
           playLevelUpFanfare();
-        } else {
+          levelUpVal = newLevel;
+          showLevelUpModal = true;
+        } else if (!newlyUnlocked || newlyUnlocked.length === 0) {
           playSuccessChime();
         }
         triggerConfetti();
@@ -218,7 +363,8 @@
         }
       }
     } else {
-      const outcome = await runSqlQuery(sqlDbSeed, code);
+      const seedToUse = (isSandboxMode && customDdlSeed.trim()) ? customDdlSeed : sqlDbSeed;
+      const outcome = await runSqlQuery(seedToUse, code);
       sqlResult = outcome;
 
       // Evaluate the custom SQL checks array
@@ -246,11 +392,16 @@
 
       if (!isSandboxMode && allChecksPassed) {
         const oldLevel = get(level);
-        completeChallenge(currentChallenge.id, currentChallenge.difficulty);
+        const newlyUnlocked = completeChallenge(currentChallenge.id, currentChallenge.difficulty);
+        if (newlyUnlocked && newlyUnlocked.length > 0) {
+          showBadgeUnlockNotification(newlyUnlocked);
+        }
         const newLevel = get(level);
         if (newLevel > oldLevel) {
           playLevelUpFanfare();
-        } else {
+          levelUpVal = newLevel;
+          showLevelUpModal = true;
+        } else if (!newlyUnlocked || newlyUnlocked.length === 0) {
           playSuccessChime();
         }
         triggerConfetti();
@@ -344,48 +495,141 @@
           <section class="workspace-panel panel-left">
             <div class="panel-header-row">
               <h2 class="subhead" style="margin: 0;">Instructions</h2>
+              {#if isSandboxMode}
+                <span class="sandbox-glow-badge">SANDBOX ACTIVE</span>
+              {/if}
               <button class="panel-toggle-btn" onclick={() => isLeftPanelCollapsed = true} title="Collapse Instructions">
                 <ChevronLeft size={14} />
               </button>
             </div>
             <div class="panel-section padding-box">
               <div class="prompt-text">
-                <p>{currentChallenge.prompt}</p>
+                <p>{@html parseMarkdown(currentChallenge.prompt)}</p>
               </div>
 
               <!-- Hint Section -->
-              <div class="expansion-block">
-                <button 
-                  class="expansion-header" 
-                  onclick={() => showHint = !showHint}
-                >
-                  <HelpCircle size={14} class="header-icon" />
-                  <span>Need a Hint?</span>
-                  <span class="caret" class:open={showHint}>▼</span>
-                </button>
-                {#if showHint}
-                  <div class="expansion-content">
-                    <p>{currentChallenge.hint}</p>
-                  </div>
-                {/if}
-              </div>
+              {#if currentChallenge.hint}
+                <div class="expansion-block">
+                  <button 
+                    class="expansion-header" 
+                    onclick={() => showHint = !showHint}
+                  >
+                    <HelpCircle size={14} class="header-icon" />
+                    <span>Need a Hint?</span>
+                    <span class="caret" class:open={showHint}>▼</span>
+                  </button>
+                  {#if showHint}
+                    <div class="expansion-content">
+                      <p>{@html parseMarkdown(currentChallenge.hint)}</p>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
 
               <!-- Solution Section -->
-              <div class="expansion-block solution-block">
-                <button 
-                  class="expansion-header" 
-                  onclick={() => showSolution = !showSolution}
-                >
-                  <Eye size={14} class="header-icon" />
-                  <span>Show Solution</span>
-                  <span class="caret" class:open={showSolution}>▼</span>
-                </button>
-                {#if showSolution}
-                  <div class="expansion-content solution-content">
-                    <pre class="solution-code"><code>{currentChallenge.solution}</code></pre>
+              {#if currentChallenge.solution}
+                <div class="expansion-block solution-block">
+                  <button 
+                    class="expansion-header" 
+                    onclick={() => showSolution = !showSolution}
+                  >
+                    <Eye size={14} class="header-icon" />
+                    <span>Show Solution</span>
+                    <span class="caret" class:open={showSolution}>▼</span>
+                  </button>
+                  {#if showSolution}
+                    <div class="expansion-content solution-content">
+                      <pre class="solution-code"><code>{currentChallenge.solution}</code></pre>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+
+              <!-- Sandbox Control Panels -->
+              {#if isSandboxMode}
+                <!-- Sandbox DDL Seeding (SQL only) -->
+                {#if activeLang === 'sql'}
+                  <div class="expansion-block">
+                    <button class="expansion-header" onclick={() => showDdlPanel = !showDdlPanel}>
+                      <Database size={14} class="header-icon" />
+                      <span>Custom Seed DDL</span>
+                      <span class="caret" class:open={showDdlPanel}>▼</span>
+                    </button>
+                    {#if showDdlPanel}
+                      <div class="expansion-content">
+                        <p style="font-size: 11px; margin-bottom: 8px; color: #64748b;">
+                          Write custom SQLite DDL schema statements to seed your Sandbox DB.
+                        </p>
+                        <textarea 
+                          class="sandbox-textarea DDL-textarea"
+                          bind:value={customDdlSeed}
+                          placeholder="CREATE TABLE my_table (id INT, name TEXT);"
+                        ></textarea>
+                        <div style="display: flex; gap: 8px; margin-top: 8px;">
+                          <button class="sandbox-btn primary" onclick={applyCustomDdl}>Apply Seed</button>
+                          <button class="sandbox-btn secondary" onclick={resetDdlToDefault}>Reset Default</button>
+                        </div>
+                      </div>
+                    {/if}
+                  </div>
+
+                  <!-- CSV Data Importer (SQL only) -->
+                  <div class="expansion-block">
+                    <button class="expansion-header" onclick={() => showCsvPanel = !showCsvPanel}>
+                      <Database size={14} class="header-icon" />
+                      <span>Import CSV Table</span>
+                      <span class="caret" class:open={showCsvPanel}>▼</span>
+                    </button>
+                    {#if showCsvPanel}
+                      <div class="expansion-content">
+                        <p style="font-size: 11px; margin-bottom: 8px; color: #64748b;">
+                          Convert raw comma-separated text into a SQLite table automatically.
+                        </p>
+                        <input 
+                          type="text" 
+                          class="sandbox-input" 
+                          bind:value={csvTableName} 
+                          placeholder="Table name (e.g. sales)" 
+                        />
+                        <textarea 
+                          class="sandbox-textarea csv-textarea"
+                          bind:value={csvDataInput}
+                          placeholder="id,name,amount&#10;1,Alice,250.50&#10;2,Bob,120.00"
+                        ></textarea>
+                        <button class="sandbox-btn primary" style="margin-top: 8px; width: 100%;" onclick={importCsvTable}>
+                          Import as SQL Table
+                        </button>
+                      </div>
+                    {/if}
                   </div>
                 {/if}
-              </div>
+
+                <!-- Sandbox Run History -->
+                <div class="expansion-block">
+                  <button class="expansion-header" onclick={() => showHistoryPanel = !showHistoryPanel}>
+                    <Terminal size={14} class="header-icon" />
+                    <span>Recent Run History</span>
+                    <span class="caret" class:open={showHistoryPanel}>▼</span>
+                  </button>
+                  {#if showHistoryPanel}
+                    {@const history = activeLang === 'python' ? sandboxHistoryPy : sandboxHistorySql}
+                    <div class="expansion-content">
+                      {#if history.length === 0}
+                        <p style="font-size: 11px; color: #64748b; margin: 0;">No sandbox runs recorded yet.</p>
+                      {:else}
+                        <div class="history-list">
+                          {#each history as item, idx}
+                            <button class="history-item" onclick={() => restoreHistoryItem(item)} title="Restore this code">
+                              <span class="history-num">#{idx + 1}</span>
+                              <span class="history-code-preview">{item.trim().slice(0, 45)}{item.trim().length > 45 ? '...' : ''}</span>
+                            </button>
+                          {/each}
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+              {/if}
             </div>
           </section>
         {/if}
@@ -472,6 +716,7 @@
                   queryResult={sqlResult.result}
                   dbState={sqlResult.dbState}
                   hasRun={hasRun}
+                  isRunning={isRunning}
                 />
               {:else}
                 <SchemaBrowser schema={sqlResult.schema || {}} dbState={sqlResult.dbState || {}} />
@@ -484,6 +729,57 @@
   {/if}
 </div>
 
+<!-- Level Up Ascend Modal (Item 55) -->
+{#if showLevelUpModal}
+  <div class="level-modal-overlay">
+    <div class="level-modal-card">
+      <div class="cyber-bracket left"></div>
+      <div class="cyber-bracket right"></div>
+      
+      <div class="level-glow-circle">
+        <Trophy size={48} class="level-modal-icon" />
+        <span class="level-num">{levelUpVal}</span>
+      </div>
+      
+      <h2 class="level-title">LEVEL ASCENDED!</h2>
+      <p class="level-subtitle">You have achieved Mastery Level {levelUpVal}</p>
+      <p class="level-desc">Keep code flowing. The binary gates await your command.</p>
+      
+      <button class="level-close-btn" onclick={() => showLevelUpModal = false}>
+        CONTINUE TRAINING
+      </button>
+    </div>
+  </div>
+{/if}
+
+<!-- Badge Unlock Notification Toast (Item 85) -->
+{#if activeBadgeUnlock}
+  <div class="badge-toast-container">
+    <div class="badge-toast" style="border-color: {activeBadgeUnlock.color}; box-shadow: 0 0 15px {activeBadgeUnlock.color}25;">
+      <div class="badge-toast-glow" style="background: {activeBadgeUnlock.color}10;"></div>
+      <div class="badge-toast-icon-wrap" style="color: {activeBadgeUnlock.color}; border-color: {activeBadgeUnlock.color}40;">
+        {#if activeBadgeUnlock.id === 'first-blood' || activeBadgeUnlock.id === 'level-5-mastery'}
+          <Trophy size={20} />
+        {:else if activeBadgeUnlock.id === 'pythonista'}
+          <Code size={20} />
+        {:else if activeBadgeUnlock.id === 'sql-maestro'}
+          <Database size={20} />
+        {:else if activeBadgeUnlock.id === 'ml-pioneer'}
+          <Star size={20} />
+        {:else if activeBadgeUnlock.id === 'svm-champion'}
+          <Shield size={20} />
+        {:else}
+          <Flame size={20} />
+        {/if}
+      </div>
+      <div class="badge-toast-content">
+        <span class="badge-toast-tag" style="color: {activeBadgeUnlock.color};">ACHIEVEMENT UNLOCKED!</span>
+        <h3 class="badge-toast-title">{activeBadgeUnlock.name}</h3>
+        <p class="badge-toast-desc">{activeBadgeUnlock.desc}</p>
+      </div>
+    </div>
+  </div>
+{/if}
 <style>
   .dojo-layout {
     display: flex;
@@ -993,5 +1289,369 @@
   .editor-container-wrap {
     flex: 1;
     overflow: hidden;
+  }
+
+  /* Sandbox badge glow tags */
+  .sandbox-glow-badge {
+    background: rgba(139, 92, 246, 0.15);
+    border: 1px solid #8b5cf6;
+    color: #c084fc;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
+    text-shadow: 0 0 5px rgba(139, 92, 246, 0.5);
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Sandbox UI Sidebar Controls */
+  .sandbox-textarea {
+    width: 100%;
+    background: #08080b;
+    border: 1px solid #1a1a24;
+    border-radius: var(--radius-xs);
+    color: #a7f3d0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 8px;
+    resize: vertical;
+    margin-top: 6px;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .sandbox-textarea:focus {
+    border-color: #10b981;
+  }
+  .DDL-textarea {
+    height: 90px;
+    color: #c084fc;
+  }
+  .csv-textarea {
+    height: 80px;
+    color: #3b82f6;
+  }
+  .sandbox-input {
+    width: 100%;
+    background: #08080b;
+    border: 1px solid #1a1a24;
+    border-radius: var(--radius-xs);
+    color: #ffffff;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 8px;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .sandbox-input:focus {
+    border-color: #10b981;
+  }
+  .sandbox-btn {
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .sandbox-btn.primary {
+    background: #10b981;
+    border: 1px solid #10b981;
+    color: #000000;
+  }
+  .sandbox-btn.primary:hover {
+    opacity: 0.9;
+  }
+  .sandbox-btn.secondary {
+    background: transparent;
+    border: 1px solid #1a1a24;
+    color: #94a3b8;
+  }
+  .sandbox-btn.secondary:hover {
+    color: #ffffff;
+    border-color: #334155;
+  }
+
+  /* History list styles */
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .history-item {
+    background: #0d0d12;
+    border: 1px solid #1c1c27;
+    border-radius: var(--radius-xs);
+    padding: 8px;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .history-item:hover {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.03);
+  }
+  .history-num {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: #10b981;
+  }
+  .history-code-preview {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  /* Level Up Modal Styles */
+  .level-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(4, 4, 6, 0.9);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.4s ease-out;
+  }
+
+  .level-modal-card {
+    background: #0d0d12;
+    border: 1px solid #eab308;
+    border-radius: var(--radius-lg);
+    width: 420px;
+    padding: 40px;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 0 40px rgba(234, 179, 8, 0.25);
+    animation: scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .cyber-bracket {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #eab308;
+  }
+  .cyber-bracket.left {
+    top: 15px;
+    left: 15px;
+    border-right: none;
+    border-bottom: none;
+  }
+  .cyber-bracket.right {
+    bottom: 15px;
+    right: 15px;
+    border-left: none;
+    border-top: none;
+  }
+
+  .level-glow-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: rgba(234, 179, 8, 0.05);
+    border: 2px dashed #eab308;
+    margin: 0 auto 24px auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: 0 0 20px rgba(234, 179, 8, 0.15);
+  }
+
+  :global(.level-modal-icon) {
+    color: #eab308;
+    margin-bottom: 2px;
+  }
+
+  .level-num {
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 800;
+    color: #ffffff;
+  }
+
+  .level-title {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 800;
+    color: #eab308;
+    margin: 0 0 8px 0;
+    letter-spacing: 0.15em;
+    text-shadow: 0 0 10px rgba(234, 179, 8, 0.4);
+  }
+
+  .level-subtitle {
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0 0 12px 0;
+  }
+
+  .level-desc {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0 0 32px 0;
+    line-height: 1.5;
+  }
+
+  .level-close-btn {
+    width: 100%;
+    height: 46px;
+    background: #eab308;
+    border: none;
+    border-radius: var(--radius-xs);
+    color: #000000;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(234, 179, 8, 0.2);
+  }
+
+  .level-close-btn:hover {
+    background: #ffffff;
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.3);
+  }
+
+  /* Badge Toast Notification */
+  .badge-toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1100;
+    animation: slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .badge-toast {
+    background: #0d0d12;
+    border: 1px solid #10b981;
+    border-radius: var(--radius-md);
+    width: 320px;
+    padding: 16px;
+    display: flex;
+    gap: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .badge-toast-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .badge-toast-icon-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    z-index: 2;
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .badge-toast-content {
+    display: flex;
+    flex-direction: column;
+    z-index: 2;
+  }
+
+  .badge-toast-tag {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    margin-bottom: 2px;
+  }
+
+  .badge-toast-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 4px 0;
+  }
+
+  .badge-toast-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  /* Markdown specific styling overrides */
+  :global(.md-inline-code) {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: rgba(16, 185, 129, 0.08);
+    color: #10b981;
+    padding: 2px 5px;
+    border-radius: 3px;
+    border: 1px solid rgba(16, 185, 129, 0.15);
+  }
+  :global(.md-code-block) {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: #08080b;
+    border: 1px solid #1a1a24;
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    overflow-x: auto;
+  }
+  :global(.md-link) {
+    color: #3b82f6;
+    text-decoration: none;
+    border-bottom: 1px dotted #3b82f6;
+  }
+  :global(.md-link:hover) {
+    color: #60a5fa;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes scaleUp {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes slideInRight {
+    from {
+      transform: translateX(120%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 </style>

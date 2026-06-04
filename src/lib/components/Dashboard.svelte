@@ -13,7 +13,9 @@
     inventory,
     unlockedBadges,
     userPythonCode,
-    userSqlCode
+    userSqlCode,
+    generateSignature,
+    updateSignature
   } from '../stores/dojo-store.js';
   import { pythonExercises } from '../data/python-exercises.js';
   import { sqlExercises } from '../data/sql-exercises.js';
@@ -213,6 +215,23 @@
     alert(`Successfully purchased ${itemType === 'shield' ? 'Streak Freeze Shield' : 'XP Double Booster'} for ${cost} XP!`);
   }
 
+  // Backup Schema Validator
+  function validateBackupSchema(data) {
+    if (!data || typeof data !== 'object') return { valid: false, reason: "Backup is not a JSON object" };
+    if (typeof data.xp !== 'number' || data.xp < 0) return { valid: false, reason: "XP must be a non-negative number" };
+    if (!Array.isArray(data.completedChallenges)) return { valid: false, reason: "Completed Challenges must be an array" };
+    if (data.completionDates && typeof data.completionDates !== 'object') return { valid: false, reason: "Completion Dates must be an object" };
+    if (data.inventory) {
+      if (typeof data.inventory.streakFreezes !== 'number' || typeof data.inventory.xpBoosts !== 'number') {
+        return { valid: false, reason: "Inventory must contain numeric streakFreezes and xpBoosts" };
+      }
+    }
+    if (data.unlockedBadges && !Array.isArray(data.unlockedBadges)) return { valid: false, reason: "Unlocked Badges must be an array" };
+    if (data.userPythonCode && typeof data.userPythonCode !== 'object') return { valid: false, reason: "User Python Code must be a key-value object" };
+    if (data.userSqlCode && typeof data.userSqlCode !== 'object') return { valid: false, reason: "User SQL Code must be a key-value object" };
+    return { valid: true };
+  }
+
   // Backup & Restore
   function exportBackup() {
     const backupData = {
@@ -226,7 +245,8 @@
       inventory: $inventory,
       unlockedBadges: $unlockedBadges,
       userPythonCode: $userPythonCode,
-      userSqlCode: $userSqlCode
+      userSqlCode: $userSqlCode,
+      signature: generateSignature($xp, $completedChallenges)
     };
     
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
@@ -249,9 +269,20 @@
       try {
         const data = JSON.parse(e.target.result);
         
-        if (typeof data.xp !== 'number' || !Array.isArray(data.completedChallenges)) {
-          alert("Invalid backup file format! Missing required properties.");
+        // 1. Run schema validation
+        const valResult = validateBackupSchema(data);
+        if (!valResult.valid) {
+          alert(`🛡️ Import Validation Failed: ${valResult.reason}`);
           return;
+        }
+
+        // 2. Validate Anti-Cheat Signature
+        const expectedSig = generateSignature(data.xp, data.completedChallenges);
+        if (data.xp > 0 || data.completedChallenges.length > 0) {
+          if (!data.signature || data.signature !== expectedSig) {
+            alert("🛡️ Import Validation Failed: Backup signature is missing or corrupted. Backup cannot be loaded.");
+            return;
+          }
         }
 
         xp.set(data.xp);
@@ -267,6 +298,9 @@
         if (Array.isArray(data.unlockedBadges)) unlockedBadges.set(data.unlockedBadges);
         if (data.userPythonCode && typeof data.userPythonCode === 'object') userPythonCode.set(data.userPythonCode);
         if (data.userSqlCode && typeof data.userSqlCode === 'object') userSqlCode.set(data.userSqlCode);
+        
+        // Force write signature to localStorage
+        localStorage.setItem('dojo_signature', expectedSig);
 
         alert("Backup restored successfully!");
         window.location.reload();
@@ -313,10 +347,10 @@
     </div>
 
     <!-- Streak Card -->
-    <div class="stat-hero-card streak-card">
+    <div class="stat-hero-card streak-card" class:has-streak={currentStreak > 0}>
       <div class="card-content">
         <span class="card-label">Daily Streak</span>
-        <span class="card-value">{currentStreak} Days</span>
+        <span class="card-value">{currentStreak} {currentStreak === 1 ? 'Day' : 'Days'}</span>
         <span class="card-sub">Keep the code fire burning!</span>
       </div>
       <Flame size={48} class="hero-card-icon streak-icon" />
@@ -1630,5 +1664,32 @@
     background: var(--color-primary);
     color: #000000;
     border-color: var(--color-primary);
+  }
+
+  /* Streak Fire Pulse Animation */
+  .streak-card.has-streak {
+    border-color: rgba(249, 115, 22, 0.4);
+    box-shadow: 0 0 15px rgba(249, 115, 22, 0.1);
+  }
+  
+  .streak-card.has-streak :global(.streak-icon) {
+    opacity: 0.25;
+    color: #f97316;
+    animation: dashboard-flame-pulsing 2s infinite ease-in-out;
+  }
+
+  @keyframes dashboard-flame-pulsing {
+    0% {
+      transform: scale(1.5);
+      filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.4));
+    }
+    50% {
+      transform: scale(1.65) rotate(-3deg);
+      filter: drop-shadow(0 0 15px rgba(249, 115, 22, 0.8));
+    }
+    100% {
+      transform: scale(1.5);
+      filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.4));
+    }
   }
 </style>
