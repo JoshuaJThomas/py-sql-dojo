@@ -23,6 +23,13 @@
       activeTablePreview = tableList[0];
     }
   });
+
+  // Force reset console tab if switching to python
+  $effect(() => {
+    if (type === 'python' && activeTab === 'table-data') {
+      activeTab = 'console';
+    }
+  });
 </script>
 
 <div class="console-box">

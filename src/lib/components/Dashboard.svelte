@@ -1,6 +1,7 @@
 <script>
   import { 
     completedChallenges, 
+    completionDates,
     xp, 
     level, 
     streak, 
@@ -19,6 +20,7 @@
   let currentXp = $derived($xp);
   let currentLevel = $derived($level);
   let currentStreak = $derived($streak);
+  let datesMap = $derived($completionDates || {});
 
   // Group challenges by chapter
   let pythonChapters = $derived(
@@ -100,19 +102,22 @@
     })
   );
 
-  // For visual mock representation, we mark today as active if they have completions
+  // Count real challenge completions per day for heatmap colors
   function getHeatmapColor(date) {
-    const todayStr = new Date().toDateString();
-    if (date.toDateString() === todayStr && completedList.length > 0) {
-      return 'active-high';
-    }
-    // Set a couple of mock historical days for visual richness if they have completed challenges
-    if (completedList.length > 0) {
-      const dayNum = date.getDate();
-      if (dayNum % 7 === 2) return 'active-low';
-      if (dayNum % 7 === 5) return 'active-med';
-    }
-    return '';
+    const targetStr = date.toDateString();
+    let count = 0;
+    
+    // Count how many keys (challenges) have this date value
+    Object.keys(datesMap).forEach(id => {
+      if (datesMap[id] === targetStr) {
+        count++;
+      }
+    });
+
+    if (count === 0) return '';
+    if (count === 1) return 'active-low';
+    if (count === 2) return 'active-med';
+    return 'active-high';
   }
 </script>
 

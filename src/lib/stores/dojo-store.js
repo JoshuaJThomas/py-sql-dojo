@@ -32,6 +32,7 @@ export const xp = writable(getStorage('xp', 0));
 export const streak = writable(getStorage('streak', 0));
 export const lastCompletedDate = writable(getStorage('last_completed_date', ''));
 export const completedChallenges = writable(getStorage('completed_challenges', []));
+export const completionDates = writable(getStorage('completion_dates', {}));
 
 // Keep track of level based on XP (every 100 XP is a level)
 export const level = writable(1);
@@ -49,6 +50,7 @@ xp.subscribe(val => {
 streak.subscribe(val => setStorage('streak', val));
 lastCompletedDate.subscribe(val => setStorage('last_completed_date', val));
 completedChallenges.subscribe(val => setStorage('completed_challenges', val));
+completionDates.subscribe(val => setStorage('completion_dates', val));
 
 // Initialize starter code for all challenges if not set
 function initializeStarterCode() {
@@ -82,12 +84,18 @@ export function completeChallenge(challengeId, isEasy) {
     completed.push(challengeId);
     completedChallenges.set(completed);
 
+    // Track date of completion
+    const today = new Date().toDateString();
+    completionDates.update(dates => {
+      dates[challengeId] = today;
+      return dates;
+    });
+
     // Add XP: 15 for easy, 30 for medium, 50 for hard
     const reward = isEasy === 'easy' ? 15 : isEasy === 'medium' ? 30 : 50;
     xp.update(val => val + reward);
 
     // Update streak
-    const today = new Date().toDateString();
     const lastDate = get(lastCompletedDate);
 
     if (lastDate !== today) {

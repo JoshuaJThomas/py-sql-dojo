@@ -46,12 +46,14 @@ export async function runPythonCode(preludeCode, code, checks = []) {
   let success = false;
 
   try {
-    // 1. Run the prelude code to define inputs (like nums, matrix, df, X, y)
+    // 1. Load packages from imports and run the prelude code to define inputs (like nums, matrix, df, X, y)
     if (preludeCode) {
+      await pyodide.loadPackagesFromImports(preludeCode);
       await pyodide.runPythonAsync(preludeCode);
     }
     
-    // 2. Run the user's code
+    // 2. Load packages from user imports and run user code
+    await pyodide.loadPackagesFromImports(code);
     await pyodide.runPythonAsync(code);
     success = true;
   } catch (err) {

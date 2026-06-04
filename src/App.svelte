@@ -88,14 +88,31 @@
   // Runner state
   let isRunning = $state(false);
   let hasRun = $state(false);
-  let pyResult = $state({ success: false, stdout: '', error: '', checksPassed: false, checkError: '' });
-  let sqlResult = $state({ success: false, result: null, error: '', schema: {}, dbState: {} });
+  let pyResult = $state({ success: false, stdout: '', error: '', checksPassed: false, checksResults: [] });
+  let sqlResult = $state({ success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [] });
 
   // UI state
   let showHint = $state(false);
   let showSolution = $state(false);
   let activeTabRight = $state('console'); // 'console' | 'schema'
   let showConfetti = $state(false);
+
+  // Watch for challenge/language/sandbox updates and reset console/results/tab views
+  $effect(() => {
+    const id = currentChallenge.id;
+    const lang = activeLang;
+    
+    hasRun = false;
+    showHint = false;
+    showSolution = false;
+    
+    pyResult = { success: false, stdout: '', error: '', checksPassed: false, checksResults: [] };
+    sqlResult = { success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [] };
+
+    if (lang === 'python' && activeTabRight === 'schema') {
+      activeTabRight = 'console';
+    }
+  });
 
   // Triggered when clicking "Train" from Dashboard
   $effect(() => {
@@ -117,6 +134,7 @@
   function handleCodeChange(newCode) {
     if (isSandboxMode) {
       localStorage.setItem(`dojo_sandbox_code_${activeLang}`, newCode);
+      code = newCode;
     } else if (activeLang === 'python') {
       userPythonCode.update(val => {
         val[activePyChallenge.id] = newCode;
