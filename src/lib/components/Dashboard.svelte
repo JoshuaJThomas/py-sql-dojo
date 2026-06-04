@@ -65,6 +65,12 @@
       if (chNum === 4) return "Joining Tables (INNER, LEFT)";
       if (chNum === 5) return "Advanced Queries (Subqueries, Multi-Joins)";
       if (chNum === 6) return "Complex Capstone Practice";
+      if (chNum === 7) return "E-Commerce Schema & Filtering";
+      if (chNum === 8) return "Sales Joins & Quantities";
+      if (chNum === 9) return "HAVING & Calculated Fields";
+      if (chNum === 10) return "NULL Handling & Left Joins";
+      if (chNum === 11) return "Subqueries & Unique Item Counts";
+      if (chNum === 12) return "Correlated Subqueries";
       return `SQL Step ${chNum}`;
     }
   }
