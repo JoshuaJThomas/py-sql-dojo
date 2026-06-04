@@ -95,6 +95,201 @@ export const pythonExercises = [
     solution: "result = [x**2 for x in nums if x % 2 != 0]",
     difficulty: "easy"
   },
+  {
+    id: "ch01-fizzbuzz-07",
+    chapter: 1,
+    topic: "loops & logic",
+    title: "FizzBuzz Challenge",
+    prompt: "Define a function `fizzbuzz(n)` that returns a list of strings representing the numbers from 1 to `n` (inclusive). For multiples of 3, return 'Fizz' instead of the number. For multiples of 5, return 'Buzz'. For multiples of both 3 and 5, return 'FizzBuzz'. Assign the function to `result`.",
+    starterCode: "def fizzbuzz(n):\n    # Write logic here\n    pass\n\nresult = fizzbuzz",
+    prelude: "",
+    checks: [
+      { test: "result(15) == ['1', '2', 'Fizz', '4', 'Buzz', 'Fizz', '7', '8', 'Fizz', 'Buzz', '11', 'Fizz', '13', '14', 'FizzBuzz']", msg: "fizzbuzz(15) output is incorrect" },
+      { test: "result(3) == ['1', '2', 'Fizz']", msg: "fizzbuzz(3) should return ['1', '2', 'Fizz']" }
+    ],
+    hint: "Use a loop or list comprehension. Check for `i % 15 == 0` first, then `i % 3 == 0`, then `i % 5 == 0`, otherwise convert `i` to a string with `str(i)`.",
+    solution: "def fizzbuzz(n):\n    res = []\n    for i in range(1, n + 1):\n      if i % 15 == 0:\n        res.append('FizzBuzz')\n      elif i % 3 == 0:\n        res.append('Fizz')\n      elif i % 5 == 0:\n        res.append('Buzz')\n      else:\n        res.append(str(i))\n    return res\nresult = fizzbuzz",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-count-vowels-08",
+    chapter: 1,
+    topic: "string parsing",
+    title: "Count Vowels",
+    prompt: "Define a function `count_vowels(s)` that counts and returns the number of vowels (a, e, i, o, u) in a string `s`, ignoring case. Assign the function to `result`.",
+    starterCode: "def count_vowels(s):\n    # Count vowels in s\n    pass\n\nresult = count_vowels",
+    prelude: "",
+    checks: [
+      { test: "result('Hello World') == 3", msg: "count_vowels('Hello World') should return 3" },
+      { test: "result('Python Programming') == 4", msg: "count_vowels('Python Programming') should return 4" },
+      { test: "result('AEIOU aeiou') == 10", msg: "count_vowels('AEIOU aeiou') should return 10" }
+    ],
+    hint: "Iterate over the string, check if characters are in a set/string of vowels, e.g., 'aeiouAEIOU'.",
+    solution: "def count_vowels(s):\n    return sum(1 for char in s if char.lower() in 'aeiou')\nresult = count_vowels",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-dict-merge-09",
+    chapter: 1,
+    topic: "dictionaries",
+    title: "Merge Dictionaries",
+    prompt: "Given two dictionaries `dict1` and `dict2`, merge them. If there's a duplicate key, keep the value from `dict2`. Assign the merged dictionary to `result`.",
+    starterCode: "# dict1 and dict2 are defined in scope\n# result = ...",
+    prelude: "dict1 = {'a': 100, 'b': 200, 'c': 300}\ndict2 = {'b': 99, 'd': 400}",
+    checks: [
+      { test: "isinstance(result, dict)", msg: "result must be a dictionary" },
+      { test: "result == {'a': 100, 'b': 99, 'c': 300, 'd': 400}", msg: "result must contain merged keys with correct values" }
+    ],
+    hint: "In Python 3.5+, you can use `{**dict1, **dict2}` or use `dict1.copy()` and `.update(dict2)`.",
+    solution: "result = {**dict1, **dict2}",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-safe-divide-10",
+    chapter: 1,
+    topic: "exception handling",
+    title: "Safe Division",
+    prompt: "Define a function `safe_divide(a, b)` that divides `a` by `b`. If `b` is 0, return `None` instead of throwing a `ZeroDivisionError`. Use a try-except block. Assign the function to `result`.",
+    starterCode: "def safe_divide(a, b):\n    # Write try-except logic here\n    pass\n\nresult = safe_divide",
+    prelude: "",
+    checks: [
+      { test: "result(10, 2) == 5.0", msg: "safe_divide(10, 2) should return 5.0" },
+      { test: "result(5, 0) is None", msg: "safe_divide(5, 0) should return None without erroring" }
+    ],
+    hint: "Wrap `return a / b` in a `try` block, and catch `ZeroDivisionError` returning `None` in the `except` block.",
+    solution: "def safe_divide(a, b):\n    try:\n        return a / b\n    except ZeroDivisionError:\n        return None\nresult = safe_divide",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-palindrome-11",
+    chapter: 1,
+    topic: "string parsing",
+    title: "Palindrome Checker",
+    prompt: "Define a function `is_palindrome(s)` that returns `True` if `s` is a palindrome (ignoring casing and all non-alphanumeric characters like spaces/punctuation), and `False` otherwise. Assign the function to `result`.",
+    starterCode: "def is_palindrome(s):\n    # Write logic here\n    pass\n\nresult = is_palindrome",
+    prelude: "",
+    checks: [
+      { test: "result('A man, a plan, a canal: Panama') == True", msg: "A man, a plan, a canal: Panama is a palindrome" },
+      { test: "result('race a car') == False", msg: "race a car is NOT a palindrome" },
+      { test: "result('No lemon, no melon') == True", msg: "No lemon, no melon is a palindrome" }
+    ],
+    hint: "Filter the string to keep only alphanumeric characters `c.isalnum()`, convert to lowercase, and check if it equals its reverse `clean_s[::-1]`.",
+    solution: "def is_palindrome(s):\n    clean_s = ''.join(c.lower() for c in s if c.isalnum())\n    return clean_s == clean_s[::-1]\nresult = is_palindrome",
+    difficulty: "medium"
+  },
+  {
+    id: "ch01-lambda-filter-12",
+    chapter: 1,
+    topic: "functional programming",
+    title: "Filter Strings with Lambda",
+    prompt: "Given a list of strings `words`, use `filter()` and a `lambda` expression to keep only strings that start with the letter 'a' (case-insensitive). Convert the filter object back into a list. Assign the list to `result`.",
+    starterCode: "# words is defined in scope\n# result = ...",
+    prelude: "words = ['Apple', 'banana', 'apricot', 'Cherry', 'avocado', 'grape']",
+    checks: [
+      { test: "isinstance(result, list)", msg: "result must be a list" },
+      { test: "result == ['Apple', 'apricot', 'avocado']", msg: "result must contain only words starting with a or A: ['Apple', 'apricot', 'avocado']" }
+    ],
+    hint: "Use `list(filter(lambda w: w.lower().startswith('a'), words))`.",
+    solution: "result = list(filter(lambda w: w.lower().startswith('a'), words))",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-most-common-13",
+    chapter: 1,
+    topic: "lists & sets",
+    title: "Most Common Element",
+    prompt: "Given a list `items`, find the most frequently occurring item in the list. If there is a tie, any of the tied items is acceptable. Assign it to `result`.",
+    starterCode: "# items is defined in scope\n# result = ...",
+    prelude: "items = ['apple', 'banana', 'apple', 'orange', 'banana', 'apple']",
+    checks: [
+      { test: "result == 'apple'", msg: "The most common element is 'apple'" }
+    ],
+    hint: "You can use `max(set(items), key=items.count)` or the `collections.Counter` class.",
+    solution: "result = max(set(items), key=items.count)",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-word-counter-14",
+    chapter: 1,
+    topic: "dictionaries",
+    title: "Word Frequency Counter",
+    prompt: "Given a string of text `sentence`, count the occurrences of each word (converted to lowercase, splitting by spaces) and store them in a dictionary. Assign it to `result`.",
+    starterCode: "# sentence is defined in scope\n# result = ...",
+    prelude: "sentence = 'The quick brown fox jumps over the lazy dog'",
+    checks: [
+      { test: "isinstance(result, dict)", msg: "result must be a dictionary" },
+      { test: "result.get('the') == 2", msg: "'the' occurs twice" },
+      { test: "result.get('quick') == 1", msg: "'quick' occurs once" }
+    ],
+    hint: "Convert `sentence.lower().split()` to a list of words, then count them in a dictionary.",
+    solution: "words = sentence.lower().split()\nresult = {}\nfor w in words:\n    result[w] = result.get(w, 0) + 1",
+    difficulty: "medium"
+  },
+  {
+    id: "ch01-fibonacci-15",
+    chapter: 1,
+    topic: "functions & recursion",
+    title: "Fibonacci Sequence",
+    prompt: "Define a function `fibonacci(n)` that returns a list of the first `n` numbers in the Fibonacci sequence (starting with 0, 1). Assign the function to `result`.",
+    starterCode: "def fibonacci(n):\n    # Return list of first n Fibonacci numbers\n    pass\n\nresult = fibonacci",
+    prelude: "",
+    checks: [
+      { test: "result(1) == [0]", msg: "first 1 fibonacci number should be [0]" },
+      { test: "result(5) == [0, 1, 1, 2, 3]", msg: "first 5 fibonacci numbers should be [0, 1, 1, 2, 3]" },
+      { test: "result(10) == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]", msg: "first 10 fibonacci numbers should be correct" }
+    ],
+    hint: "Initialize the sequence with `[0, 1]` if `n > 1` (or handle base cases), and loop from `2` to `n` appending the sum of the last two elements.",
+    solution: "def fibonacci(n):\n    if n <= 0: return []\n    if n == 1: return [0]\n    seq = [0, 1]\n    while len(seq) < n:\n        seq.append(seq[-1] + seq[-2])\n    return seq\nresult = fibonacci",
+    difficulty: "medium"
+  },
+  {
+    id: "ch01-json-parsing-16",
+    chapter: 1,
+    topic: "string parsing",
+    title: "JSON Key Extraction",
+    prompt: "Parse a JSON string `json_data` into a Python dictionary, and extract the value of the key 'user_id'. Assign it to `result`.",
+    starterCode: "import json\n# json_data is defined in scope\n# result = ...",
+    prelude: "json_data = '{\"user_id\": 9482, \"username\": \"ninja_coder\", \"skills\": [\"python\", \"sql\"]}'",
+    checks: [
+      { test: "result == 9482", msg: "result must be the integer 9482" }
+    ],
+    hint: "Use the `json.loads(json_data)` function to parse the string, then access key `'user_id'`.",
+    solution: "import json\nd = json.loads(json_data)\nresult = d['user_id']",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-list-flatten-17",
+    chapter: 1,
+    topic: "lists",
+    title: "Flatten a Nested List",
+    prompt: "Given a nested list of lists `nested_list`, flatten it into a single flat list. Assign it to `result`.",
+    starterCode: "# nested_list is defined in scope\n# result = ...",
+    prelude: "nested_list = [[1, 2, 3], [4, 5], [6], [7, 8, 9]]",
+    checks: [
+      { test: "isinstance(result, list)", msg: "result must be a list" },
+      { test: "result == [1, 2, 3, 4, 5, 6, 7, 8, 9]", msg: "result must be a flattened list" }
+    ],
+    hint: "Use a nested list comprehension: `[item for sublist in nested_list for item in sublist]` or a standard loop.",
+    solution: "result = [item for sublist in nested_list for item in sublist]",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-factorial-18",
+    chapter: 1,
+    topic: "functions",
+    title: "Factorial Calculation",
+    prompt: "Define a function `factorial(n)` that returns the factorial of a non-negative integer `n`. Assign the function to `result`.",
+    starterCode: "def factorial(n):\n    # Return n!\n    pass\n\nresult = factorial",
+    prelude: "",
+    checks: [
+      { test: "result(0) == 1", msg: "0! must equal 1" },
+      { test: "result(5) == 120", msg: "5! must equal 120" },
+      { test: "result(7) == 5040", msg: "7! must equal 5040" }
+    ],
+    hint: "Recall that `0! = 1` and `n! = n * (n - 1)!`. You can use a simple recursive function or loop.",
+    solution: "def factorial(n):\n    if n <= 1: return 1\n    return n * factorial(n - 1)\nresult = factorial",
+    difficulty: "easy"
+  },
 
   // --- NUMPY (Chapter 2) ---
   {
