@@ -82,13 +82,37 @@
                 <div class="log-title">Test Cases Checklist:</div>
                 <div class="checks-list">
                   {#each checksResults as ch}
-                    <div class="check-row" class:passed={ch.passed}>
-                      {#if ch.passed}
-                        <CheckCircle size={14} class="check-icon pass" />
-                      {:else}
-                        <AlertCircle size={14} class="check-icon fail" />
+                    <div class="check-item-wrapper">
+                      <div class="check-row" class:passed={ch.passed}>
+                        {#if ch.passed}
+                          <CheckCircle size={14} class="check-icon pass" />
+                        {:else}
+                          <AlertCircle size={14} class="check-icon fail" />
+                        {/if}
+                        <span class="check-msg">{ch.msg}</span>
+                      </div>
+                      {#if !ch.passed && (ch.has_actual || ch.has_expected || ch.error_detail)}
+                        <div class="check-details-box">
+                          {#if ch.error_type && ch.error_type !== 'AssertionError'}
+                            <div class="detail-row">
+                              <span class="detail-key">Exception:</span>
+                              <code class="detail-val error-highlight">{ch.error_type}: {ch.error_detail}</code>
+                            </div>
+                          {/if}
+                          {#if ch.has_expected}
+                            <div class="detail-row">
+                              <span class="detail-key">Expected:</span>
+                              <pre class="detail-pre"><code>{ch.expected}</code></pre>
+                            </div>
+                          {/if}
+                          {#if ch.has_actual}
+                            <div class="detail-row">
+                              <span class="detail-key">Returned:</span>
+                              <pre class="detail-pre actual-pre"><code>{ch.actual}</code></pre>
+                            </div>
+                          {/if}
+                        </div>
                       {/if}
-                      <span class="check-msg">{ch.msg}</span>
                     </div>
                   {/each}
                 </div>
@@ -138,13 +162,15 @@
                   <div class="log-title">Dojo Checks:</div>
                   <div class="checks-list">
                     {#each checksResults as ch}
-                      <div class="check-row" class:passed={ch.passed}>
-                        {#if ch.passed}
-                          <CheckCircle size={14} class="check-icon pass" />
-                        {:else}
-                          <AlertCircle size={14} class="check-icon fail" />
-                        {/if}
-                        <span class="check-msg">{ch.msg}</span>
+                      <div class="check-item-wrapper">
+                        <div class="check-row" class:passed={ch.passed}>
+                          {#if ch.passed}
+                            <CheckCircle size={14} class="check-icon pass" />
+                          {:else}
+                            <AlertCircle size={14} class="check-icon fail" />
+                          {/if}
+                          <span class="check-msg">{ch.msg}</span>
+                        </div>
                       </div>
                     {/each}
                   </div>
@@ -356,10 +382,10 @@
     margin-top: 4px;
   }
 
-  .checks-list {
+  .check-item-wrapper {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
   }
 
   .check-row {
@@ -390,6 +416,62 @@
 
   .check-msg {
     font-family: var(--font-body);
+  }
+
+  .check-details-box {
+    margin-left: 24px;
+    padding: 10px 14px;
+    background: #07070a;
+    border-left: 2px solid #ef4444;
+    border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .detail-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .detail-key {
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .detail-val {
+    font-family: var(--font-mono);
+    color: #cbd5e1;
+  }
+
+  .error-highlight {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  .detail-pre {
+    background: #0c0c10;
+    border: 1px solid #14141d;
+    padding: 6px 10px;
+    border-radius: var(--radius-xs);
+    font-family: var(--font-mono);
+    color: #a7f3d0;
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+
+  .actual-pre {
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.15);
   }
 
   /* Table Results Styling */
