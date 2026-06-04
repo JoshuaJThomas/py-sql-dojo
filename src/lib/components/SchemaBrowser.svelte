@@ -1,7 +1,7 @@
 <script>
   import { Database, Table, Key } from 'lucide-svelte';
 
-  let { schema = {} } = $props();
+  let { schema = {}, dbState = {} } = $props();
 
   let tableList = $derived(Object.keys(schema));
 </script>
@@ -22,6 +22,11 @@
             <div class="table-header">
               <Table size={14} class="table-icon" />
               <span class="table-name">{tableName}</span>
+              {#if dbState[tableName] && dbState[tableName].length > 0}
+                <span class="row-count-badge">
+                  {dbState[tableName][0].values.length} rows
+                </span>
+              {/if}
             </div>
             <div class="column-list">
               {#each schema[tableName] as col}
@@ -120,6 +125,17 @@
     font-size: 13px;
     font-weight: 700;
     color: #ffffff;
+  }
+
+  .row-count-badge {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: #64748b;
+    background: rgba(100, 116, 139, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: auto;
+    font-weight: 500;
   }
 
   .column-list {
