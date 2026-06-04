@@ -1,12 +1,12 @@
 <script>
-  import { Terminal, AlertCircle, CheckCircle, Database, LayoutGrid } from 'lucide-svelte';
+  import { Terminal, AlertCircle, CheckCircle, Database, HelpCircle } from 'lucide-svelte';
 
   let { 
     type = 'python',
     stdout = '',
     error = '',
     checksPassed = false,
-    checkError = '',
+    checksResults = [],
     queryResult = null,
     dbState = {},
     hasRun = false
@@ -77,20 +77,21 @@
                 </div>
               {/if}
 
-              <!-- Assertion Results -->
+              <!-- Test Cases Checklist -->
               <div class="assertion-section">
-                {#if checksPassed}
-                  <div class="assertion-status pass">
-                    <CheckCircle size={16} class="status-icon" />
-                    <span>All assertion checks passed successfully!</span>
-                  </div>
-                {:else}
-                  <div class="assertion-status fail">
-                    <AlertCircle size={16} class="status-icon" />
-                    <span class="bold">Assertion check failed:</span>
-                    <pre class="assert-error">{checkError || "The returned value did not match the expected solution."}</pre>
-                  </div>
-                {/if}
+                <div class="log-title">Test Cases Checklist:</div>
+                <div class="checks-list">
+                  {#each checksResults as ch}
+                    <div class="check-row" class:passed={ch.passed}>
+                      {#if ch.passed}
+                        <CheckCircle size={14} class="check-icon pass" />
+                      {:else}
+                        <AlertCircle size={14} class="check-icon fail" />
+                      {/if}
+                      <span class="check-msg">{ch.msg}</span>
+                    </div>
+                  {/each}
+                </div>
               </div>
             {/if}
 
@@ -108,7 +109,7 @@
               <div class="table-results-container">
                 <div class="log-title success-text">
                   <CheckCircle size={14} class="log-icon" />
-                  <span>Query Executed Successfully:</span>
+                  <span>Query Executed:</span>
                 </div>
                 <div class="table-wrapper">
                   <table>
@@ -131,6 +132,23 @@
                   </table>
                 </div>
                 <span class="row-count">{queryResult[0].values.length} rows returned.</span>
+
+                <!-- SQL Test Cases Checklist -->
+                <div class="assertion-section" style="margin-top: 10px;">
+                  <div class="log-title">Dojo Checks:</div>
+                  <div class="checks-list">
+                    {#each checksResults as ch}
+                      <div class="check-row" class:passed={ch.passed}>
+                        {#if ch.passed}
+                          <CheckCircle size={14} class="check-icon pass" />
+                        {:else}
+                          <AlertCircle size={14} class="check-icon fail" />
+                        {/if}
+                        <span class="check-msg">{ch.msg}</span>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
               </div>
             {:else if queryResult}
               <div class="empty-results">
@@ -280,11 +298,12 @@
   }
 
   .log-title {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     color: #64748b;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    margin-bottom: 6px;
   }
 
   .stdout-log {
@@ -297,7 +316,7 @@
     color: #cbd5e1;
     white-space: pre-wrap;
     margin: 0;
-    max-height: 250px;
+    max-height: 200px;
     overflow-y: auto;
   }
 
@@ -337,44 +356,40 @@
     margin-top: 4px;
   }
 
-  .assertion-status {
-    border-radius: var(--radius-xs);
-    padding: 12px;
+  .checks-list {
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    font-size: 14px;
+    flex-direction: column;
+    gap: 6px;
   }
 
-  .assertion-status.pass {
+  .check-row {
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.12);
+    border-radius: var(--radius-xs);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #fca5a5;
+  }
+
+  .check-row.passed {
     background: rgba(16, 185, 129, 0.05);
-    border: 1px solid rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.12);
     color: #a7f3d0;
   }
 
-  .assertion-status.fail {
-    background: rgba(239, 68, 68, 0.05);
-    border: 1px solid rgba(239, 68, 68, 0.15);
-    color: #fca5a5;
-    flex-direction: column;
+  .check-icon.pass {
+    color: #10b981;
   }
 
-  .status-icon {
-    flex-shrink: 0;
-    margin-top: 2px;
+  .check-icon.fail {
+    color: #ef4444;
   }
 
-  .assert-error {
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    border-radius: var(--radius-xs);
-    padding: 8px 12px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: #fda4af;
-    white-space: pre-wrap;
-    margin-top: 6px;
-    width: 100%;
+  .check-msg {
+    font-family: var(--font-body);
   }
 
   /* Table Results Styling */
@@ -389,7 +404,7 @@
     border: 1px solid #181822;
     border-radius: var(--radius-xs);
     overflow-x: auto;
-    max-height: 300px;
+    max-height: 250px;
   }
 
   table {

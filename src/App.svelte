@@ -131,7 +131,7 @@
     hasRun = true;
 
     if (activeLang === 'python') {
-      const outcome = await runPythonCode(code, currentChallenge.check, {});
+      const outcome = await runPythonCode(currentChallenge.prelude, code, currentChallenge.checks);
       pyResult = outcome;
 
       if (outcome.success && outcome.checksPassed) {
@@ -142,19 +142,30 @@
       const outcome = await runSqlQuery(sqlDbSeed, code);
       sqlResult = outcome;
 
-      // Evaluate the custom check function
-      let isCorrect = false;
+      // Evaluate the custom SQL checks array
+      let allChecksPassed = true;
+      const checksResults = [];
+      
       if (outcome.success) {
-        try {
-          isCorrect = currentChallenge.check(outcome.result);
-        } catch (e) {
-          isCorrect = false;
+        for (const check of currentChallenge.checks) {
+          let passed = false;
+          try {
+            passed = check.rule(outcome.result);
+          } catch (e) {
+            passed = false;
+          }
+          checksResults.push({ passed, msg: check.msg });
+          if (!passed) allChecksPassed = false;
         }
+      } else {
+        allChecksPassed = false;
+        checksResults.push({ passed: false, msg: "Database query execution failed." });
       }
 
-      sqlResult.checksPassed = isCorrect;
+      sqlResult.checksPassed = allChecksPassed;
+      sqlResult.checksResults = checksResults;
 
-      if (isCorrect) {
+      if (allChecksPassed) {
         completeChallenge(currentChallenge.id, currentChallenge.difficulty);
         triggerConfetti();
       }
@@ -309,7 +320,7 @@
                 stdout={pyResult.stdout}
                 error={activeLang === 'python' ? pyResult.error : sqlResult.error}
                 checksPassed={activeLang === 'python' ? pyResult.checksPassed : sqlResult.checksPassed}
-                checkError={pyResult.checkError}
+                checksResults={activeLang === 'python' ? pyResult.checksResults : sqlResult.checksResults}
                 queryResult={sqlResult.result}
                 dbState={sqlResult.dbState}
                 hasRun={hasRun}
