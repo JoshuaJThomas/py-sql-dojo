@@ -41,6 +41,7 @@
   // State
   let activeView = $state('dashboard'); // 'dashboard' | 'playground'
   let activeLang = $derived($language);
+  let isSandboxMode = $state(false);
 
   // Active exercises
   let activePyIdx = $derived($pythonChallengeIndex);
@@ -49,14 +50,35 @@
   let activePyChallenge = $derived(pythonExercises[activePyIdx]);
   let activeSqlChallenge = $derived(sqlExercises[activeSqlIdx]);
 
-  let currentChallenge = $derived(activeLang === 'python' ? activePyChallenge : activeSqlChallenge);
+  let currentChallenge = $derived(
+    isSandboxMode
+      ? {
+          id: "sandbox",
+          title: "Free Sandbox Playground",
+          prompt: activeLang === 'python' 
+            ? "Experiment with your Python code here. You have full access to standard output, variables assignment, and preloaded libraries like NumPy, Pandas, Scikit-Learn, and matplotlib." 
+            : "Write and execute arbitrary SQL queries against the SQLite database. Use the Schema Browser or Browse Tables on the right to examine tables like employees, departments, customers, orders, products, and order_items.",
+          starterCode: activeLang === 'python'
+            ? "# Write Python code here\nprint('Hello from the Python Dojo!')\n"
+            : "-- Write SQL queries here\nSELECT * FROM products;\n",
+          checks: [],
+          hint: "Use standard Python print statements or variable assignment (e.g. result = ...). For SQL, highlight multiple tables using JOIN queries.",
+          solution: activeLang === 'python'
+            ? "# Example: \nimport numpy as np\narr = np.array([1, 2, 3])\nprint(arr * 2)"
+            : "-- Example:\nSELECT c.customer_name, SUM(o.total_amount) \nFROM orders o \nINNER JOIN customers c ON o.customer_id = c.customer_id \nGROUP BY c.customer_name;",
+          difficulty: "sandbox"
+        }
+      : (activeLang === 'python' ? activePyChallenge : activeSqlChallenge)
+  );
 
   // Bind code inputs to stores
   let code = $state('');
 
   // Watch for challenge/language updates and update code state
   $effect(() => {
-    if (activeLang === 'python') {
+    if (isSandboxMode) {
+      code = localStorage.getItem(`dojo_sandbox_code_${activeLang}`) || currentChallenge.starterCode;
+    } else if (activeLang === 'python') {
       code = $userPythonCode[activePyChallenge.id] || activePyChallenge.starterCode;
     } else {
       code = $userSqlCode[activeSqlChallenge.id] || activeSqlChallenge.starterCode;
@@ -82,6 +104,7 @@
       // Avoid switching immediately on boot
       if (localStorage.getItem('dojo_python_challenge_index') !== null || localStorage.getItem('dojo_sql_challenge_index') !== null) {
         activeView = 'playground';
+        isSandboxMode = false;
         showHint = false;
         showSolution = false;
         hasRun = false;
@@ -92,7 +115,9 @@
 
   // Handle editor updates
   function handleCodeChange(newCode) {
-    if (activeLang === 'python') {
+    if (isSandboxMode) {
+      localStorage.setItem(`dojo_sandbox_code_${activeLang}`, newCode);
+    } else if (activeLang === 'python') {
       userPythonCode.update(val => {
         val[activePyChallenge.id] = newCode;
         return val;
@@ -134,7 +159,7 @@
       const outcome = await runPythonCode(currentChallenge.prelude, code, currentChallenge.checks);
       pyResult = outcome;
 
-      if (outcome.success && outcome.checksPassed) {
+      if (!isSandboxMode && outcome.success && outcome.checksPassed) {
         completeChallenge(currentChallenge.id, currentChallenge.difficulty);
         triggerConfetti();
       }
@@ -165,7 +190,7 @@
       sqlResult.checksPassed = allChecksPassed;
       sqlResult.checksResults = checksResults;
 
-      if (allChecksPassed) {
+      if (!isSandboxMode && allChecksPassed) {
         completeChallenge(currentChallenge.id, currentChallenge.difficulty);
         triggerConfetti();
       }
@@ -199,14 +224,14 @@
 
   {#if activeView === 'dashboard'}
     <main class="main-content">
-      <Dashboard />
+      <Dashboard onOpenSandbox={() => { isSandboxMode = true; activeView = 'playground'; hasRun = false; showHint = false; showSolution = false; }} />
     </main>
   {:else}
     <!-- Playground View -->
     <main class="playground-layout">
       <!-- Top Action Bar -->
       <div class="play-action-bar">
-        <button class="back-btn" onclick={() => activeView = 'dashboard'}>
+        <button class="back-btn" onclick={() => { activeView = 'dashboard'; isSandboxMode = false; }}>
           <ArrowLeft size={16} />
           <span>Back to Syllabus</span>
         </button>
@@ -443,6 +468,7 @@
   .diff-badge.easy { background: rgba(16, 185, 129, 0.08); color: #10b981; }
   .diff-badge.medium { background: rgba(234, 179, 8, 0.08); color: #eab308; }
   .diff-badge.hard { background: rgba(239, 68, 68, 0.08); color: #ef4444; }
+  .diff-badge.sandbox { background: rgba(139, 92, 246, 0.08); color: #c084fc; }
 
   .topic-tag {
     font-family: var(--font-mono);
