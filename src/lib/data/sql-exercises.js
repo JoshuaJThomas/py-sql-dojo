@@ -59,6 +59,47 @@ INSERT INTO orders VALUES (9004, 503, '2023-10-05', 15000.00);
 INSERT INTO orders VALUES (9005, 504, '2023-10-07', 850.00);
 INSERT INTO orders VALUES (9006, 502, '2023-10-09', 6100.20);
 INSERT INTO orders VALUES (9007, 505, '2023-10-10', 4300.00);
+
+CREATE TABLE products (
+  product_id INTEGER PRIMARY KEY,
+  product_name TEXT NOT NULL,
+  category TEXT,
+  price REAL
+);
+
+CREATE TABLE order_items (
+  item_id INTEGER PRIMARY KEY,
+  order_id INTEGER,
+  product_id INTEGER,
+  quantity INTEGER,
+  unit_price REAL,
+  FOREIGN KEY (order_id) REFERENCES orders(order_id),
+  FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
+
+INSERT INTO products VALUES (101, 'Laptop', 'Electronics', 1200.00);
+INSERT INTO products VALUES (102, 'Monitor', 'Electronics', 300.00);
+INSERT INTO products VALUES (103, 'Keyboard', 'Electronics', 80.00);
+INSERT INTO products VALUES (104, 'Office Chair', 'Furniture', 250.00);
+INSERT INTO products VALUES (105, 'Desk Lamp', 'Furniture', 45.00);
+INSERT INTO products VALUES (106, 'Python Book', 'Books', 35.00);
+INSERT INTO products VALUES (107, 'SQL Guide', 'Books', 40.00);
+INSERT INTO products VALUES (108, 'Wireless Mouse', 'Electronics', 25.00);
+
+INSERT INTO order_items VALUES (1, 9001, 101, 9, 1200.00);
+INSERT INTO order_items VALUES (2, 9001, 102, 4, 300.00);
+INSERT INTO order_items VALUES (3, 9002, 101, 4, 1200.00);
+INSERT INTO order_items VALUES (4, 9002, 103, 7, 80.00);
+INSERT INTO order_items VALUES (5, 9003, 104, 10, 250.00);
+INSERT INTO order_items VALUES (6, 9003, 102, 2, 300.00);
+INSERT INTO order_items VALUES (7, 9004, 101, 12, 1200.00);
+INSERT INTO order_items VALUES (8, 9004, 102, 2, 300.00);
+INSERT INTO order_items VALUES (9, 9005, 106, 10, 35.00);
+INSERT INTO order_items VALUES (10, 9005, 107, 12, 40.00);
+INSERT INTO order_items VALUES (11, 9006, 101, 5, 1200.00);
+INSERT INTO order_items VALUES (12, 9006, 105, 2, 45.00);
+INSERT INTO order_items VALUES (13, 9007, 104, 16, 250.00);
+INSERT INTO order_items VALUES (14, 9007, 103, 3, 80.00);
 `;
 
 export const sqlExercises = [
@@ -318,5 +359,167 @@ export const sqlExercises = [
     hint: "Join `departments d` with `employees e` on `d.manager_id = e.emp_id`.",
     solution: "SELECT d.dept_name, e.name, e.salary FROM departments d INNER JOIN employees e ON d.manager_id = e.emp_id;",
     difficulty: "hard"
+  },
+  {
+    id: "sql-product-filter-16",
+    chapter: 7,
+    topic: "Filtering & Sorting",
+    title: "Filter Expensive Electronics",
+    prompt: "Select `product_name` and `price` from the `products` table for all products in the 'Electronics' category with a price greater than 100. Sort the results by `price` descending.",
+    starterCode: "-- Filter and sort electronic products\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 2, msg: "Result must contain exactly 2 products (Laptop and Monitor)" },
+      { rule: (result) => result && result[0].values[0][0] === 'Laptop' && result[0].values[0][1] === 1200, msg: "First item must be the Laptop costing 1200" }
+    ],
+    hint: "Use `WHERE category = 'Electronics' AND price > 100 ORDER BY price DESC;`",
+    solution: "SELECT product_name, price FROM products WHERE category = 'Electronics' AND price > 100 ORDER BY price DESC;",
+    difficulty: "easy"
+  },
+  {
+    id: "sql-category-counts-17",
+    chapter: 7,
+    topic: "Aggregation",
+    title: "Count Products by Category",
+    prompt: "Retrieve the `category` and count of products in each category (as `product_count`). Group the results by `category` and order them by `product_count` descending.",
+    starterCode: "-- Count products by category\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 3, msg: "Result must contain 3 categories" },
+      { rule: (result) => result && result[0].values[0][0] === 'Electronics' && result[0].values[0][1] === 4, msg: "Electronics must have 4 products" }
+    ],
+    hint: "Use `SELECT category, COUNT(*) AS product_count FROM products GROUP BY category ORDER BY product_count DESC;`",
+    solution: "SELECT category, COUNT(*) AS product_count FROM products GROUP BY category ORDER BY product_count DESC;",
+    difficulty: "easy"
+  },
+  {
+    id: "sql-quantity-sold-18",
+    chapter: 8,
+    topic: "JOINS & Aggregations",
+    title: "Total Quantity Sold per Product",
+    prompt: "Find the total quantity of each product sold. Retrieve the `product_name` and the sum of `quantity` (as `total_quantity`) from joining `products` and `order_items`. Group by `product_name` and order by `total_quantity` descending.",
+    starterCode: "-- Find sum of quantities sold per product\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 'Laptop' && row[1] === 30), msg: "Laptop must have a total quantity sold of 30" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 'Office Chair' && row[1] === 26), msg: "Office Chair must have a total quantity sold of 26" }
+    ],
+    hint: "Use `INNER JOIN order_items ON products.product_id = order_items.product_id`, group by `product_name`, and sum the `quantity`.",
+    solution: "SELECT p.product_name, SUM(oi.quantity) AS total_quantity FROM products p INNER JOIN order_items oi ON p.product_id = oi.product_id GROUP BY p.product_name ORDER BY total_quantity DESC;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-orders-books-19",
+    chapter: 8,
+    topic: "Subqueries & Joins",
+    title: "Orders Containing Books",
+    prompt: "Retrieve the distinct `order_id` for all orders that contain at least one product from the 'Books' category.",
+    starterCode: "-- Select order_id for book purchases\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 1 && result[0].values[0][0] === 9005, msg: "Only order 9005 should contain books" }
+    ],
+    hint: "Join `order_items` with `products` and filter by `category = 'Books'` to select `DISTINCT order_id`.",
+    solution: "SELECT DISTINCT oi.order_id FROM order_items oi INNER JOIN products p ON oi.product_id = p.product_id WHERE p.category = 'Books';",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-avg-price-category-20",
+    chapter: 9,
+    topic: "HAVING Clause",
+    title: "High Average Price Categories",
+    prompt: "Find the average price (as `avg_price`) of products in each category, showing only those categories where the average price is greater than 100.",
+    starterCode: "-- Categories with average product price > 100\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 2, msg: "Only 2 categories should qualify (Electronics and Furniture)" },
+      { rule: (result) => result && result[0].values.every(row => row[1] > 100), msg: "All returned categories must have average price > 100" }
+    ],
+    hint: "Group by `category` and use a `HAVING AVG(price) > 100` clause.",
+    solution: "SELECT category, AVG(price) AS avg_price FROM products GROUP BY category HAVING avg_price > 100;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-high-value-items-21",
+    chapter: 9,
+    topic: "Calculated Columns",
+    title: "High Value Order Items",
+    prompt: "Select the `order_id`, product's `product_name`, the item `quantity`, and calculated subtotal (calculated as `quantity * unit_price` and named `subtotal`) for all items in `order_items` where the subtotal is greater than 3,000. Sort descending by `subtotal`.",
+    starterCode: "-- Items with subtotal > 3000\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 5, msg: "There must be exactly 5 matching order items" },
+      { rule: (result) => result && result[0].values[0][3] === 14400, msg: "The highest subtotal must be 14,400" }
+    ],
+    hint: "Join `order_items oi` with `products p` on `oi.product_id = p.product_id` and filter in `WHERE (oi.quantity * oi.unit_price) > 3000`.",
+    solution: "SELECT oi.order_id, p.product_name, oi.quantity, (oi.quantity * oi.unit_price) AS subtotal FROM order_items oi INNER JOIN products p ON oi.product_id = p.product_id WHERE subtotal > 3000 ORDER BY subtotal DESC;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-never-ordered-22",
+    chapter: 10,
+    topic: "Joins & NULLs",
+    title: "Products Never Ordered",
+    prompt: "Retrieve the `product_name` of all products that have never been ordered (i.e. they do not have any matching records in the `order_items` table).",
+    starterCode: "-- Find product names with no order records\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 1 && result[0].values[0][0] === 'Wireless Mouse', msg: "Wireless Mouse should be the only product never ordered" }
+    ],
+    hint: "Use a `LEFT JOIN order_items` and check `WHERE order_items.product_id IS NULL`, or use a `NOT IN (SELECT product_id FROM order_items)` subquery.",
+    solution: "SELECT p.product_name FROM products p LEFT JOIN order_items oi ON p.product_id = oi.product_id WHERE oi.product_id IS NULL;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-top-customer-qty-23",
+    chapter: 10,
+    topic: "JOINS & Aggregations",
+    title: "Top Customer by Items Purchased",
+    prompt: "Find the customer name (`customer_name`) who purchased the highest total quantity of items across all their orders. Output the `customer_name` and their total quantity (as `total_items`).",
+    starterCode: "-- Find the customer who bought the most items\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 1 && result[0].values[0][0] === 'TechCorp' && result[0].values[0][1] === 25, msg: "Top customer must be TechCorp with 25 items purchased" }
+    ],
+    hint: "Join `customers`, `orders`, and `order_items`. Group by `customer_name`, sum `quantity`, order by the sum descending, and use `LIMIT 1`.",
+    solution: "SELECT c.customer_name, SUM(oi.quantity) AS total_items FROM customers c INNER JOIN orders o ON c.customer_id = o.customer_id INNER JOIN order_items oi ON o.order_id = oi.order_id GROUP BY c.customer_name ORDER BY total_items DESC LIMIT 1;",
+    difficulty: "hard"
+  },
+  {
+    id: "sql-multi-item-orders-24",
+    chapter: 11,
+    topic: "HAVING & Aggregations",
+    title: "Orders with Multiple Products",
+    prompt: "Select the `order_id` and the count of unique products in that order (as `unique_product_count`) for all orders that contain more than 1 unique product.",
+    starterCode: "-- Orders containing multiple unique products\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 7, msg: "All 7 orders contain exactly 2 unique products, so they should all be returned" }
+    ],
+    hint: "Group by `order_id` and use `HAVING COUNT(DISTINCT product_id) > 1`.",
+    solution: "SELECT order_id, COUNT(DISTINCT product_id) AS unique_product_count FROM order_items GROUP BY order_id HAVING unique_product_count > 1;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-correlated-subquery-25",
+    chapter: 12,
+    topic: "Correlated Subqueries",
+    title: "Most Expensive Product Per Category",
+    prompt: "Retrieve the `category`, `product_name`, and `price` of the most expensive product in each category. Sort the results by `price` descending.",
+    starterCode: "-- Find most expensive product in each category\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => {
+          if (!result) return false;
+          const rows = result[0].values;
+          return rows.some(r => r[0] === 'Electronics' && r[1] === 'Laptop' && r[2] === 1200) &&
+                 rows.some(r => r[0] === 'Furniture' && r[1] === 'Office Chair' && r[2] === 250) &&
+                 rows.some(r => r[0] === 'Books' && r[1] === 'SQL Guide' && r[2] === 40);
+        }, msg: "Must output the correct maximum-price product for each of the 3 categories" }
+    ],
+    hint: "Use a correlated subquery: `WHERE price = (SELECT MAX(price) FROM products p2 WHERE p2.category = products.category)`.",
+    solution: "SELECT category, product_name, price FROM products WHERE price = (SELECT MAX(price) FROM products p2 WHERE p2.category = products.category) ORDER BY price DESC;",
+    difficulty: "hard"
   }
 ];
+
