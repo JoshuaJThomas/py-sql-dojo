@@ -75,3 +75,35 @@ a {
 a:hover {
   text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
 }
+
+/* --- THEMES ENGINE --- */
+body.theme-obsidian {
+  --color-canvas: #09090c;
+  --color-primary: #10b981;
+  --color-card-border: #1c1c27;
+  --color-hairline: #1a1a24;
+}
+
+body.theme-cyberpunk {
+  --color-canvas: #0d0614;
+  --color-primary: #d946ef;
+  --color-card-border: #2e1065;
+  --color-hairline: #3b0764;
+  --color-ink: #fdf4ff;
+}
+
+body.theme-matrix {
+  --color-canvas: #020804;
+  --color-primary: #22c55e;
+  --color-card-border: #14532d;
+  --color-hairline: #052e16;
+  --color-ink: #f0fdf4;
+}
+
+body.theme-classic {
+  --color-canvas: #0b0f19;
+  --color-primary: #3b82f6;
+  --color-card-border: #1e293b;
+  --color-hairline: #1e293b;
+  --color-ink: #f8fafc;
+}

@@ -662,5 +662,317 @@ export const pythonExercises = [
     hint: "Instantiate `PCA(n_components=2)`, call `.fit(X)`, and retrieve the `.explained_variance_ratio_` attribute.",
     solution: "model = PCA(n_components=2)\nmodel.fit(X)\nresult = model.explained_variance_ratio_",
     difficulty: "easy"
+  },
+  {
+    id: "ch01-string-format-19",
+    chapter: 1,
+    topic: "string formatting",
+    title: "F-Strings Formatting",
+    prompt: "Given variables `name` (string) and `score` (float), use f-string formatting to create a string: '{name} scored {score:.2f}%'. Assign it to `result`.",
+    starterCode: "# name and score are pre-defined\nresult = ...",
+    prelude: "name = 'Alex'\nscore = 94.756",
+    checks: [
+      { test: "result == 'Alex scored 94.76%'", msg: "result must format name and score with 2 decimal places" }
+    ],
+    hint: "Use f'{name} scored {score:.2f}%'.",
+    solution: "result = f'{name} scored {score:.2f}%'",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-regex-search-20",
+    chapter: 1,
+    topic: "regular expressions",
+    title: "Regex Email Extractor",
+    prompt: "Write a function `extract_email(text)` that uses the `re` module to find and return the first email address in a text string. If none is found, return `None`. Assign the function to `result`.",
+    starterCode: "import re\n\ndef extract_email(text):\n    # Return first email or None\n    pass\n\nresult = extract_email",
+    prelude: "",
+    checks: [
+      { test: "result('contact us at support@dojo.com for info') == 'support@dojo.com'", msg: "Should extract 'support@dojo.com'" },
+      { test: "result('no email here') is None", msg: "Should return None if no email matches" }
+    ],
+    hint: "Use re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', text). If match exists, return .group(0), else None.",
+    solution: "import re\ndef extract_email(text):\n    match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}', text)\n    return match.group(0) if match else None\nresult = extract_email",
+    difficulty: "medium"
+  },
+  {
+    id: "ch01-pathlib-ops-21",
+    chapter: 1,
+    topic: "file operations",
+    title: "Extract File Extension",
+    prompt: "Given a file path string `path_str`, use `pathlib.Path` to extract and return the suffix (extension, e.g. '.json' or '.py') in lowercase. Assign the function to `result`.",
+    starterCode: "from pathlib import Path\n\ndef get_extension(path_str):\n    # Write logic here\n    pass\n\nresult = get_extension",
+    prelude: "",
+    checks: [
+      { test: "result('docs/invoice.PDF') == '.pdf'", msg: "Should return '.pdf'" },
+      { test: "result('/usr/bin/python') == ''", msg: "Should return empty string for files with no extension" }
+    ],
+    hint: "Use Path(path_str).suffix.lower().",
+    solution: "from pathlib import Path\ndef get_extension(path_str):\n    return Path(path_str).suffix.lower()\nresult = get_extension",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-list-slicing-22",
+    chapter: 1,
+    topic: "lists",
+    title: "List Slicing and Step",
+    prompt: "Given a list `numbers`, return a list containing the elements from index 2 up to index 8 (exclusive) in reverse order. Assign the list to `result`.",
+    starterCode: "# numbers is pre-defined\nresult = ...",
+    prelude: "numbers = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]",
+    checks: [
+      { test: "result == [80, 70, 60, 50, 40, 30]", msg: "Result must be sliced correctly: [80, 70, 60, 50, 40, 30]" }
+    ],
+    hint: "First slice from index 2 to 8, then reverse using [::-1] or use index step numbers[7:1:-1].",
+    solution: "result = numbers[7:1:-1]",
+    difficulty: "medium"
+  },
+  {
+    id: "ch01-map-lambda-23",
+    chapter: 1,
+    topic: "functional programming",
+    title: "Map & Lambda Converter",
+    prompt: "Given a list of Celsius temperatures `celsius_list`, use `map()` and a `lambda` expression to convert them to Fahrenheit. (Fahrenheit = Celsius * 9/5 + 32). Convert the map object to a list and assign to `result`.",
+    starterCode: "# celsius_list is pre-defined\nresult = ...",
+    prelude: "celsius_list = [0, 20, 37, 100]",
+    checks: [
+      { test: "result == [32.0, 68.0, 98.6, 212.0]", msg: "Result must contain correct Fahrenheit temperatures" }
+    ],
+    hint: "Use list(map(lambda c: c * 9/5 + 32, celsius_list)).",
+    solution: "result = list(map(lambda c: c * 9/5 + 32, celsius_list))",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-set-operations-24",
+    chapter: 1,
+    topic: "sets",
+    title: "Symmetric Difference",
+    prompt: "Given two sets `set_a` and `set_b`, return a set containing elements that are in either `set_a` or `set_b`, but not in both. Assign to `result`.",
+    starterCode: "# set_a and set_b are pre-defined\nresult = ...",
+    prelude: "set_a = {1, 2, 3, 4}\nset_b = {3, 4, 5, 6}",
+    checks: [
+      { test: "result == {1, 2, 5, 6}", msg: "Result must be the symmetric difference {1, 2, 5, 6}" }
+    ],
+    hint: "Use set_a.symmetric_difference(set_b) or set_a ^ set_b.",
+    solution: "result = set_a ^ set_b",
+    difficulty: "easy"
+  },
+  {
+    id: "ch01-generators-yield-25",
+    chapter: 1,
+    topic: "generators",
+    title: "Even Number Generator",
+    prompt: "Define a generator function `even_generator(limit)` that yields even numbers starting from 0 up to but not including `limit`. Assign the generator function to `result`.",
+    starterCode: "def even_generator(limit):\n    # Yield even numbers\n    pass\n\nresult = even_generator",
+    prelude: "",
+    checks: [
+      { test: "list(result(10)) == [0, 2, 4, 6, 8]", msg: "Should yield [0, 2, 4, 6, 8] for limit=10" }
+    ],
+    hint: "Use a loop, check if i % 2 == 0, and yield i.",
+    solution: "def even_generator(limit):\n    for i in range(limit):\n        if i % 2 == 0:\n            yield i\nresult = even_generator",
+    difficulty: "medium"
+  },
+  {
+    id: "ch01-decorators-timer-26",
+    chapter: 1,
+    topic: "decorators",
+    title: "Custom Counter Decorator",
+    prompt: "Write a decorator function `count_calls(func)` that counts how many times the decorated function is called. The decorator should add a `call_count` attribute to the decorated wrapper, initializing it to 0 and incrementing it on each call before executing the function. Assign the decorator to `result`.",
+    starterCode: "def count_calls(func):\n    # Write wrapper logic\n    pass\n\nresult = count_calls",
+    prelude: "",
+    checks: [
+      { test: "@result\ndef dummy(): return 1\ndummy(); dummy()\ndummy.call_count == 2", msg: "The call_count attribute must increment on every function call" }
+    ],
+    hint: "Define a wrapper. Set wrapper.call_count = 0 on wrapper, increment inside wrapper, call func, and return wrapper.",
+    solution: "def count_calls(func):\n    def wrapper(*args, **kwargs):\n        wrapper.call_count += 1\n        return func(*args, **kwargs)\n    wrapper.call_count = 0\n    return wrapper\nresult = count_calls",
+    difficulty: "hard"
+  },
+  {
+    id: "ch01-datetime-conv-27",
+    chapter: 1,
+    topic: "datetime",
+    title: "Days Between Dates",
+    prompt: "Define a function `days_between(d1_str, d2_str)` that calculates the absolute number of days between two date strings formatted as 'YYYY-MM-DD'. Assign the function to `result`.",
+    starterCode: "from datetime import datetime\n\ndef days_between(d1_str, d2_str):\n    # Return absolute difference in days\n    pass\n\nresult = days_between",
+    prelude: "",
+    checks: [
+      { test: "result('2026-06-01', '2026-06-05') == 4", msg: "Difference between 2026-06-01 and 2026-06-05 must be 4 days" },
+      { test: "result('2026-06-10', '2026-06-05') == 5", msg: "Should support date subtraction in reverse order (absolute value)" }
+    ],
+    hint: "Parse strings with datetime.strptime(date_str, '%Y-%m-%d'), subtract, and return abs(delta.days).",
+    solution: "from datetime import datetime\ndef days_between(d1_str, d2_str):\n    d1 = datetime.strptime(d1_str, '%Y-%m-%d')\n    d2 = datetime.strptime(d2_str, '%Y-%m-%d')\n    return abs((d2 - d1).days)\nresult = days_between",
+    difficulty: "medium"
+  },
+  {
+    id: "ch01-math-calculations-28",
+    chapter: 1,
+    topic: "math operations",
+    title: "Circle Area and Circumference",
+    prompt: "Given the radius `r`, compute the area and circumference of a circle. Use `math.pi`. Return a tuple `(area, circumference)` rounded to 3 decimal places. Assign the function to `result`.",
+    starterCode: "import math\n\ndef circle_stats(r):\n    # Return (area, circumference) rounded to 3 dec places\n    pass\n\nresult = circle_stats",
+    prelude: "",
+    checks: [
+      { test: "result(5) == (78.54, 31.416)", msg: "circle_stats(5) must match expected results rounded to 3 decimal places" }
+    ],
+    hint: "Area is pi * r^2 and circumference is 2 * pi * r. Round using round(val, 3).",
+    solution: "import math\ndef circle_stats(r):\n    area = math.pi * (r ** 2)\n    circ = 2 * math.pi * r\n    return (round(area, 3), round(circ, 3))\nresult = circle_stats",
+    difficulty: "easy"
+  },
+  {
+    id: "ch02-numpy-broadcast-04",
+    chapter: 2,
+    topic: "numpy essentials",
+    title: "Broadcasting Array Shift",
+    prompt: "Given a 2D NumPy array `arr` and a 1D array `row_shift`, subtract `row_shift` from each row of `arr` using broadcasting. Assign the resulting array to `result`.",
+    starterCode: "# arr and row_shift are pre-defined\nresult = ...",
+    prelude: "import numpy as np\narr = np.array([[10, 20, 30], [40, 50, 60]])\nrow_shift = np.array([1, 2, 3])",
+    checks: [
+      { test: "import numpy as np; expected = np.array([[9, 18, 27], [39, 48, 57]]); np.allclose(result, expected)", msg: "Result must correctly subtract row_shift from every row of arr" }
+    ],
+    hint: "Execute arr - row_shift.",
+    solution: "result = arr - row_shift",
+    difficulty: "easy"
+  },
+  {
+    id: "ch02-numpy-reshape-05",
+    chapter: 2,
+    topic: "numpy essentials",
+    title: "Reshape and Flatten",
+    prompt: "Given a 1D NumPy array `flat_arr` of size 12, reshape it to a 2D array of shape (3, 4), and then transpose it to get shape (4, 3). Assign the final transposed array to `result`.",
+    starterCode: "# flat_arr is pre-defined\nresult = ...",
+    prelude: "import numpy as np\nflat_arr = np.arange(12)",
+    checks: [
+      { test: "result.shape == (4, 3)", msg: "Result must have shape (4, 3)" },
+      { test: "import numpy as np; expected = np.arange(12).reshape(3, 4).T; np.allclose(result, expected)", msg: "Result values must match reshaped and transposed values" }
+    ],
+    hint: "Use flat_arr.reshape(3, 4).T.",
+    solution: "result = flat_arr.reshape(3, 4).T",
+    difficulty: "easy"
+  },
+  {
+    id: "ch03-pandas-loc-iloc-04",
+    chapter: 3,
+    topic: "pandas analytics",
+    title: "Indexing with loc and iloc",
+    prompt: "Given a Pandas DataFrame `df` with row index labels 'a', 'b', 'c', select the value in column 'Price' for row label 'b' using `.loc`, and the value in the first row, second column using `.iloc`. Assign the tuple `(loc_val, iloc_val)` to `result`.",
+    starterCode: "# df is pre-defined\nresult = ...",
+    prelude: "import pandas as pd\ndf = pd.DataFrame({'Item': ['Apple', 'Banana', 'Cherry'], 'Price': [0.5, 0.3, 0.8]}, index=['a', 'b', 'c'])",
+    checks: [
+      { test: "isinstance(result, tuple)", msg: "result must be a tuple" },
+      { test: "result == (0.3, 0.5)", msg: "result must be (0.3, 0.5)" }
+    ],
+    hint: "Use df.loc['b', 'Price'] and df.iloc[0, 1].",
+    solution: "result = (df.loc['b', 'Price'], df.iloc[0, 1])",
+    difficulty: "medium"
+  },
+  {
+    id: "ch03-pandas-apply-05",
+    chapter: 3,
+    topic: "pandas analytics",
+    title: "Apply Custom Logic",
+    prompt: "Given a Pandas DataFrame `df` representing employee salaries, write a function or lambda expression with `.apply()` to double any salary below 50,000, leaving others unchanged. Assign the updated 'Salary' column to `result`.",
+    starterCode: "# df is pre-defined\nresult = ...",
+    prelude: "import pandas as pd\ndf = pd.DataFrame({'Name': ['Alice', 'Bob', 'Charlie'], 'Salary': [45000, 60000, 30000]})",
+    checks: [
+      { test: "list(result) == [90000, 60000, 60000]", msg: "Salaries below 50,000 should be doubled" }
+    ],
+    hint: "Use df['Salary'].apply(lambda x: x * 2 if x < 50000 else x).",
+    solution: "result = df['Salary'].apply(lambda x: x * 2 if x < 50000 else x)",
+    difficulty: "medium"
+  },
+  {
+    id: "ch03-pandas-nans-06",
+    chapter: 3,
+    topic: "pandas analytics",
+    title: "Missing Value Imputation",
+    prompt: "Given a Pandas DataFrame `df` containing missing values (`NaN`), fill all missing values in the 'Age' column with the median age of that column. Assign the modified DataFrame to `result`.",
+    starterCode: "# df is pre-defined\nresult = ...",
+    prelude: "import pandas as pd; import numpy as np\ndf = pd.DataFrame({'Name': ['Joe', 'Jill', 'Jack', 'Jan'], 'Age': [25.0, np.nan, 35.0, np.nan]})",
+    checks: [
+      { test: "result['Age'].isnull().sum() == 0", msg: "No missing values should remain in 'Age' column" },
+      { test: "list(result['Age']) == [25.0, 30.0, 35.0, 30.0]", msg: "NaN values must be replaced by column median (30.0)" }
+    ],
+    hint: "Calculate median with df['Age'].median(), then fillna.",
+    solution: "df_copy = df.copy()\ndf_copy['Age'] = df_copy['Age'].fillna(df_copy['Age'].median())\nresult = df_copy",
+    difficulty: "medium"
+  },
+  {
+    id: "ch08-lasso-reg-03",
+    chapter: 8,
+    topic: "regression models",
+    title: "Lasso L1 Regularization",
+    prompt: "Train a `Lasso` regression model with regularizer coefficient `alpha = 0.5` on features `X` and targets `y`. Assign the fitted model to `result`.",
+    starterCode: "from sklearn.linear_model import Lasso\n# X and y are pre-defined\nresult = ...",
+    prelude: "from sklearn.datasets import make_regression\nX, y = make_regression(n_samples=40, n_features=3, random_state=42)",
+    checks: [
+      { test: "from sklearn.linear_model import Lasso; isinstance(result, Lasso)", msg: "result must be an instance of Lasso" },
+      { test: "result.alpha == 0.5", msg: "Lasso alpha parameter must be 0.5" }
+    ],
+    hint: "Use Lasso(alpha=0.5) and fit it.",
+    solution: "model = Lasso(alpha=0.5)\nmodel.fit(X, y)\nresult = model",
+    difficulty: "easy"
+  },
+  {
+    id: "ch10-train-test-split-02",
+    chapter: 10,
+    topic: "model evaluation",
+    title: "Train Test Split",
+    prompt: "Use scikit-learn `train_test_split` to split dataset features `X` and labels `y` into training and validation sets. Use a test size of 30% (`test_size=0.3`) and set `random_state=42`. Assign the resulting tuple `(X_train, X_test, y_train, y_test)` to `result`.",
+    starterCode: "from sklearn.model_selection import train_test_split\n# X and y are pre-defined\nresult = ...",
+    prelude: "from sklearn.datasets import make_classification\nX, y = make_classification(n_samples=60, n_features=4, random_state=42)",
+    checks: [
+      { test: "isinstance(result, tuple) and len(result) == 4", msg: "result must be a tuple of 4 elements" },
+      { test: "result[0].shape == (42, 4) and result[1].shape == (18, 4)", msg: "X_train should have 42 samples and X_test should have 18 samples" }
+    ],
+    hint: "Use train_test_split(X, y, test_size=0.3, random_state=42).",
+    solution: "result = train_test_split(X, y, test_size=0.3, random_state=42)",
+    difficulty: "easy"
+  },
+  {
+    id: "ch10-confusion-matrix-03",
+    chapter: 10,
+    topic: "model evaluation",
+    title: "Model Accuracy & Matrix",
+    prompt: "Given true labels `y_true` and predicted labels `y_pred`, calculate the confusion matrix and the overall accuracy score. Assign the tuple `(conf_matrix, accuracy)` to `result`.",
+    starterCode: "from sklearn.metrics import confusion_matrix, accuracy_score\n# y_true and y_pred are pre-defined\nresult = ...",
+    prelude: "y_true = [0, 1, 1, 0, 1, 0, 0, 1]\ny_pred = [0, 1, 0, 0, 1, 0, 1, 1]",
+    checks: [
+      { test: "isinstance(result, tuple) and len(result) == 2", msg: "result must be a tuple of 2 items" },
+      { test: "result[1] == 0.75", msg: "Accuracy should be 6 out of 8 (0.75)" },
+      { test: "result[0][0,0] == 3 and result[0][1,1] == 3", msg: "Confusion matrix values are incorrect" }
+    ],
+    hint: "Call confusion_matrix(y_true, y_pred) and accuracy_score(y_true, y_pred).",
+    solution: "result = (confusion_matrix(y_true, y_pred), accuracy_score(y_true, y_pred))",
+    difficulty: "easy"
+  },
+  {
+    id: "ch15-gradient-boosting-03",
+    chapter: 15,
+    topic: "ensemble learning",
+    title: "Gradient Boosting Classifier",
+    prompt: "Train a `GradientBoostingClassifier` with `learning_rate=0.1` and `n_estimators=50` on features `X` and labels `y`. Assign the fitted model to `result`.",
+    starterCode: "from sklearn.ensemble import GradientBoostingClassifier\n# X and y are pre-defined\nresult = ...",
+    prelude: "from sklearn.datasets import make_classification\nX, y = make_classification(n_samples=50, n_features=4, random_state=42)",
+    checks: [
+      { test: "from sklearn.ensemble import GradientBoostingClassifier; isinstance(result, GradientBoostingClassifier)", msg: "result must be a GradientBoostingClassifier" },
+      { test: "result.n_estimators == 50 and result.learning_rate == 0.1", msg: "GradientBoosting model parameters do not match" }
+    ],
+    hint: "Use GradientBoostingClassifier(n_estimators=50, learning_rate=0.1) and fit.",
+    solution: "model = GradientBoostingClassifier(n_estimators=50, learning_rate=0.1)\nmodel.fit(X, y)\nresult = model",
+    difficulty: "medium"
+  },
+  {
+    id: "ch18-count-vectorizer-02",
+    chapter: 18,
+    topic: "natural language processing",
+    title: "Bag of Words Text Vectorizer",
+    prompt: "Convert the `corpus` documents list to a matrix of token counts using `CountVectorizer` with English stop words. Fit the vectorizer on the corpus, and retrieve the shape of the resulting transform matrix. Assign the shape tuple to `result`.",
+    starterCode: "from sklearn.feature_extraction.text import CountVectorizer\n# corpus is pre-defined\nresult = ...",
+    prelude: "corpus = ['The quick brown fox jumps over the lazy dog.', 'Never jump over the lazy dog.']",
+    checks: [
+      { test: "isinstance(result, tuple) and len(result) == 2", msg: "result must be a shape tuple" },
+      { test: "result == (2, 6)", msg: "Result shape must be (2, 6) after removing stop words" }
+    ],
+    hint: "Use CountVectorizer(stop_words='english'). Fit-transform and call .shape.",
+    solution: "vec = CountVectorizer(stop_words='english')\nmat = vec.fit_transform(corpus)\nresult = mat.shape",
+    difficulty: "medium"
   }
 ];
