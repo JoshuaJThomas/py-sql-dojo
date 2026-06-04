@@ -8,10 +8,29 @@ function getStorage(key, fallback) {
   const val = localStorage.getItem(`dojo_${key}`);
   if (val === null) return fallback;
   try {
-    return JSON.parse(val);
+    const parsed = JSON.parse(val);
+    if (parsed === null) return fallback;
+    return parsed;
   } catch (e) {
     return val;
   }
+}
+
+// Helper to get and sanitize stored types
+function getStorageSanitized(key, fallback, expectedType) {
+  let val = getStorage(key, fallback);
+  if (expectedType === 'array') {
+    if (!Array.isArray(val)) return fallback;
+  } else if (expectedType === 'object') {
+    if (val === null || typeof val !== 'object' || Array.isArray(val)) return fallback;
+  } else if (expectedType === 'number') {
+    const num = Number(val);
+    if (isNaN(num)) return fallback;
+    val = num;
+  } else if (expectedType === 'string') {
+    if (typeof val !== 'string') return fallback;
+  }
+  return val;
 }
 
 // Helper to set localstorage
@@ -21,23 +40,23 @@ function setStorage(key, val) {
   }
 }
 
-export const language = writable(getStorage('language', 'python'));
-export const pythonChallengeIndex = writable(getStorage('python_challenge_index', 0));
-export const sqlChallengeIndex = writable(getStorage('sql_challenge_index', 0));
+export const language = writable(getStorageSanitized('language', 'python', 'string'));
+export const pythonChallengeIndex = writable(getStorageSanitized('python_challenge_index', 0, 'number'));
+export const sqlChallengeIndex = writable(getStorageSanitized('sql_challenge_index', 0, 'number'));
 
-export const userPythonCode = writable(getStorage('user_python_code', {}));
-export const userSqlCode = writable(getStorage('user_sql_code', {}));
+export const userPythonCode = writable(getStorageSanitized('user_python_code', {}, 'object'));
+export const userSqlCode = writable(getStorageSanitized('user_sql_code', {}, 'object'));
 
-export const xp = writable(getStorage('xp', 0));
-export const streak = writable(getStorage('streak', 0));
-export const lastCompletedDate = writable(getStorage('last_completed_date', ''));
-export const completedChallenges = writable(getStorage('completed_challenges', []));
-export const completionDates = writable(getStorage('completion_dates', {}));
+export const xp = writable(getStorageSanitized('xp', 0, 'number'));
+export const streak = writable(getStorageSanitized('streak', 0, 'number'));
+export const lastCompletedDate = writable(getStorageSanitized('last_completed_date', '', 'string'));
+export const completedChallenges = writable(getStorageSanitized('completed_challenges', [], 'array'));
+export const completionDates = writable(getStorageSanitized('completion_dates', {}, 'object'));
 
-export const theme = writable(getStorage('theme', 'obsidian'));
+export const theme = writable(getStorageSanitized('theme', 'obsidian', 'string'));
 export const soundEnabled = writable(getStorage('sound_enabled', true));
-export const inventory = writable(getStorage('inventory', { streakFreezes: 0, xpBoosts: 0 }));
-export const unlockedBadges = writable(getStorage('unlocked_badges', []));
+export const inventory = writable(getStorageSanitized('inventory', { streakFreezes: 0, xpBoosts: 0 }, 'object'));
+export const unlockedBadges = writable(getStorageSanitized('unlocked_badges', [], 'array'));
 
 // Keep track of level based on XP (every 100 XP is a level)
 export const level = writable(1);

@@ -126,8 +126,20 @@
   let csvTableName = $state('');
   let csvDataInput = $state('');
 
-  let sandboxHistoryPy = $state(JSON.parse(localStorage.getItem('dojo_sandbox_history_python') || '[]'));
-  let sandboxHistorySql = $state(JSON.parse(localStorage.getItem('dojo_sandbox_history_sql') || '[]'));
+  // Helper to safely parse sandbox history values from localstorage
+  function loadHistory(lang) {
+    try {
+      const val = localStorage.getItem(`dojo_sandbox_history_${lang}`);
+      if (!val) return [];
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  let sandboxHistoryPy = $state(loadHistory('python'));
+  let sandboxHistorySql = $state(loadHistory('sql'));
 
   // Level Up and Achievement Toast notifications
   let showLevelUpModal = $state(false);
