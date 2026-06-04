@@ -11,6 +11,26 @@
   let xpInCurrentLevel = $derived(currentXp % 100);
   let xpProgressPercent = $derived(Math.min(xpInCurrentLevel, 100));
 
+  let isXpPulsing = $state(false);
+  let prevXp = $state(0);
+  let isFirstRun = $state(true);
+  $effect(() => {
+    if (isFirstRun) {
+      prevXp = currentXp;
+      isFirstRun = false;
+      return;
+    }
+    if (currentXp > prevXp) {
+      isXpPulsing = true;
+      const timer = setTimeout(() => {
+        isXpPulsing = false;
+      }, 1000);
+      prevXp = currentXp;
+      return () => clearTimeout(timer);
+    } else {
+      prevXp = currentXp;
+    }
+  });
   function setLang(lang) {
     language.set(lang);
   }
@@ -54,7 +74,7 @@
     <!-- Right Stats Panel -->
     <div class="stats-panel">
       <!-- Streak -->
-      <div class="stat-badge streak-badge" title="Daily streak">
+      <div class="stat-badge streak-badge" class:has-streak={currentStreak > 0} title="Daily streak">
         <Flame size={18} class="streak-icon" />
         <span class="stat-val">{currentStreak}</span>
       </div>
@@ -67,7 +87,7 @@
           <span class="xp-text">{xpInCurrentLevel}/100 XP</span>
         </div>
         <div class="xp-bar-bg">
-          <div class="xp-bar-fill" style="width: {xpProgressPercent}%"></div>
+          <div class="xp-bar-fill" class:pulse={isXpPulsing} style="width: {xpProgressPercent}%"></div>
         </div>
       </div>
 
@@ -232,6 +252,49 @@
     background: #eab308;
     border-radius: var(--radius-full);
     transition: width 0.3s ease-out;
+  }
+
+  .xp-bar-fill.pulse {
+    animation: xp-pulse-glow 0.8s ease-out;
+  }
+
+  @keyframes xp-pulse-glow {
+    0% {
+      background: #ffffff;
+      box-shadow: 0 0 15px #ffffff, 0 0 30px #eab308;
+    }
+    50% {
+      box-shadow: 0 0 25px #eab308, 0 0 45px #eab308;
+    }
+    100% {
+      background: #eab308;
+      box-shadow: none;
+    }
+  }
+
+  .streak-badge.has-streak {
+    border-color: rgba(249, 115, 22, 0.45);
+    background: rgba(249, 115, 22, 0.08);
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.15);
+  }
+
+  .streak-badge.has-streak :global(.streak-icon) {
+    animation: header-flame-pulsing 1.8s infinite ease-in-out;
+  }
+
+  @keyframes header-flame-pulsing {
+    0% {
+      transform: scale(1);
+      filter: drop-shadow(0 0 1px rgba(249, 115, 22, 0.4));
+    }
+    50% {
+      transform: scale(1.15);
+      filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.9));
+    }
+    100% {
+      transform: scale(1);
+      filter: drop-shadow(0 0 1px rgba(249, 115, 22, 0.4));
+    }
   }
 
   .reset-btn {

@@ -42,19 +42,48 @@ export const unlockedBadges = writable(getStorage('unlocked_badges', []));
 // Keep track of level based on XP (every 100 XP is a level)
 export const level = writable(1);
 
+// Anti-Cheat DJB2 Signature generator
+export function generateSignature(xpVal, completedList) {
+  const salt = "gemini-dojo-vanguard-salt-2026";
+  const sortedCompleted = [...completedList].sort().join(',');
+  const rawString = `${xpVal}:${sortedCompleted}:${salt}`;
+  let hash = 5381;
+  for (let i = 0; i < rawString.length; i++) {
+    hash = ((hash << 5) + hash) + rawString.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+// Update local signature
+export function updateSignature() {
+  if (typeof window === 'undefined') return;
+  const currentXp = get(xp);
+  const currentCompleted = get(completedChallenges);
+  const sig = generateSignature(currentXp, currentCompleted);
+  localStorage.setItem('dojo_signature', sig);
+}
+
 // Subscribe to store updates and save to localStorage
 language.subscribe(val => setStorage('language', val));
 pythonChallengeIndex.subscribe(val => setStorage('python_challenge_index', val));
 sqlChallengeIndex.subscribe(val => setStorage('sql_challenge_index', val));
 userPythonCode.subscribe(val => setStorage('user_python_code', val));
 userSqlCode.subscribe(val => setStorage('user_sql_code', val));
+
 xp.subscribe(val => {
   setStorage('xp', val);
   level.set(Math.floor(val / 100) + 1);
+  updateSignature();
 });
+
 streak.subscribe(val => setStorage('streak', val));
 lastCompletedDate.subscribe(val => setStorage('last_completed_date', val));
-completedChallenges.subscribe(val => setStorage('completed_challenges', val));
+
+completedChallenges.subscribe(val => {
+  setStorage('completed_challenges', val);
+  updateSignature();
+});
+
 completionDates.subscribe(val => setStorage('completion_dates', val));
 
 theme.subscribe(val => {
@@ -92,6 +121,71 @@ function initializeStarterCode() {
 }
 
 initializeStarterCode();
+
+// Vanguard Anti-Cheat Verification on startup
+function checkVanguardIntegrity() {
+  if (typeof window === 'undefined') return;
+  const loadedXp = get(xp);
+  const loadedCompleted = get(completedChallenges);
+  const loadedSig = localStorage.getItem('dojo_signature');
+  
+  if (loadedXp > 0 || loadedCompleted.length > 0) {
+    const expectedSig = generateSignature(loadedXp, loadedCompleted);
+    if (!loadedSig || loadedSig !== expectedSig) {
+      alert("🛡️ Vanguard Anti-Cheat: Local storage modification detected! Your progress has been reverted to prevent cheating.");
+      // Rollback
+      xp.set(0);
+      completedChallenges.set([]);
+      unlockedBadges.set([]);
+      streak.set(0);
+      lastCompletedDate.set('');
+      completionDates.set({});
+      updateSignature();
+    }
+  } else {
+    updateSignature();
+  }
+}
+
+// Daily Streak verification on load (Auto-consumes Streak Freeze Shield if missed a day)
+export function checkDailyStreakOnLoad() {
+  if (typeof window === 'undefined') return;
+  const lastDateStr = get(lastCompletedDate);
+  if (!lastDateStr) return;
+
+  const todayStr = new Date().toDateString();
+  const lastDate = new Date(lastDateStr);
+  const today = new Date(todayStr);
+  
+  // Calculate difference in days
+  const diffTime = Math.abs(today - lastDate);
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays > 1 && lastDateStr !== todayStr) {
+    // They missed at least 1 day!
+    const currentStreak = get(streak);
+    if (currentStreak > 0) {
+      const inv = get(inventory);
+      if (inv.streakFreezes > 0) {
+        inv.streakFreezes--;
+        inventory.set(inv);
+        // Streak is preserved, but we update lastCompletedDate to yesterday so it acts as if they completed it yesterday!
+        const yesterday = new Date(Date.now() - 86400000).toDateString();
+        lastCompletedDate.set(yesterday);
+        alert(`🛡️ Streak Shield Activated! One Streak Freeze Shield has been consumed to preserve your daily streak of ${currentStreak} days.`);
+      } else {
+        // Reset streak to 0
+        streak.set(0);
+        lastCompletedDate.set('');
+        alert("🔥 Oh no! You missed a day and had no Streak Freeze Shield. Your daily streak has reset.");
+      }
+    }
+  }
+}
+
+// Trigger checks on load
+checkVanguardIntegrity();
+checkDailyStreakOnLoad();
 
 // Helper to evaluate and unlock achievement badges
 export function checkAchievements() {
@@ -177,13 +271,22 @@ export function completeChallenge(challengeId, isEasy) {
         // First completion ever
         streak.set(1);
       } else {
-        // Missed a day, reset to 1
-        streak.set(1);
+        // Missed a day! Check if they have a Streak Freeze Shield
+        const inv = get(inventory);
+        if (inv.streakFreezes > 0) {
+          inv.streakFreezes--;
+          inventory.set(inv);
+          alert("🛡️ Streak Shield Activated! One Streak Freeze Shield has been consumed to preserve your daily streak.");
+        } else {
+          // Missed a day, reset to 1
+          streak.set(1);
+        }
       }
       lastCompletedDate.set(today);
     }
 
     // Trigger achievement evaluations
-    checkAchievements();
+    return checkAchievements();
   }
+  return [];
 }

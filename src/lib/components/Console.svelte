@@ -9,7 +9,8 @@
     checksResults = [],
     queryResult = null,
     dbState = {},
-    hasRun = false
+    hasRun = false,
+    isRunning = false
   } = $props();
 
   let activeTab = $state('console'); // 'console' | 'table-data'
@@ -151,7 +152,13 @@
 
   <div class="console-body" bind:this={consoleBodyRef}>
     {#if activeTab === 'console'}
-      {#if !hasRun}
+      {#if isRunning}
+        <div class="console-loading-state">
+          <div class="cyber-spinner"></div>
+          <div class="loading-pulse-text">EXECUTING CODE SANDBOX...</div>
+          <div class="loading-sub-text">Compiling WebAssembly packages</div>
+        </div>
+      {:else if !hasRun}
         <div class="idle-state">
           <Terminal size={24} class="idle-icon" />
           <p>Click "Run Code" to execute your solution.</p>
@@ -719,5 +726,50 @@
 
   .console-action-btn.csv-btn:hover {
     border-color: #10b981;
+  }
+
+  /* Cyber Loading Spinner inside Console */
+  .console-loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 200px;
+    gap: 16px;
+  }
+
+  .cyber-spinner {
+    width: 48px;
+    height: 48px;
+    border: 3px solid #1a1a24;
+    border-top-color: #10b981;
+    border-radius: 50%;
+    animation: console-spin 1s cubic-bezier(0.53, 0.21, 0.29, 0.85) infinite;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
+  }
+
+  @keyframes console-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .loading-pulse-text {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: #10b981;
+    letter-spacing: 0.15em;
+    animation: text-pulse-glow 1.5s ease-in-out infinite;
+  }
+
+  @keyframes text-pulse-glow {
+    0%, 100% { opacity: 0.6; text-shadow: 0 0 2px rgba(16, 185, 129, 0.1); }
+    50% { opacity: 1; text-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
+  }
+
+  .loading-sub-text {
+    font-size: 11px;
+    color: #64748b;
   }
 </style>
