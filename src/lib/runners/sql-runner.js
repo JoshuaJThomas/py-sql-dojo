@@ -53,7 +53,9 @@ export async function runSqlQuery(seedSql, querySql) {
   try {
     const tablesResult = db.exec("SELECT name FROM sqlite_master WHERE type='table';");
     if (tablesResult.length > 0) {
-      const tables = tablesResult[0].values.map(row => row[0]);
+      const tables = tablesResult[0].values
+        .map(row => row[0])
+        .filter(name => name !== 'sqlite_sequence');
       for (const table of tables) {
         const info = db.exec(`PRAGMA table_info(${table});`);
         if (info.length > 0) {
