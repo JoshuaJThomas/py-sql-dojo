@@ -14,8 +14,11 @@
     userPythonCode, 
     userSqlCode, 
     completedChallenges, 
-    completeChallenge 
+    completeChallenge,
+    level
   } from './lib/stores/dojo-store.js';
+  import { get } from 'svelte/store';
+  import { playSuccessChime, playLevelUpFanfare, playErrorBuzz } from './lib/utils/soundscapes.js';
 
   // Import exercise data
   import { pythonExercises } from './lib/data/python-exercises.js';
@@ -184,12 +187,27 @@
     hasRun = true;
 
     if (activeLang === 'python') {
+      const oldLevel = get(level);
       const outcome = await runPythonCode(currentChallenge.prelude, code, currentChallenge.checks);
       pyResult = outcome;
 
       if (!isSandboxMode && outcome.success && outcome.checksPassed) {
         completeChallenge(currentChallenge.id, currentChallenge.difficulty);
+        const newLevel = get(level);
+        if (newLevel > oldLevel) {
+          playLevelUpFanfare();
+        } else {
+          playSuccessChime();
+        }
         triggerConfetti();
+      } else if (!isSandboxMode && (!outcome.success || !outcome.checksPassed)) {
+        playErrorBuzz();
+      } else if (isSandboxMode) {
+        if (outcome.success) {
+          playSuccessChime();
+        } else {
+          playErrorBuzz();
+        }
       }
     } else {
       const outcome = await runSqlQuery(sqlDbSeed, code);
@@ -219,8 +237,23 @@
       sqlResult.checksResults = checksResults;
 
       if (!isSandboxMode && allChecksPassed) {
+        const oldLevel = get(level);
         completeChallenge(currentChallenge.id, currentChallenge.difficulty);
+        const newLevel = get(level);
+        if (newLevel > oldLevel) {
+          playLevelUpFanfare();
+        } else {
+          playSuccessChime();
+        }
         triggerConfetti();
+      } else if (!isSandboxMode && !allChecksPassed) {
+        playErrorBuzz();
+      } else if (isSandboxMode) {
+        if (outcome.success) {
+          playSuccessChime();
+        } else {
+          playErrorBuzz();
+        }
       }
     }
 

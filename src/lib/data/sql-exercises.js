@@ -520,6 +520,238 @@ export const sqlExercises = [
     hint: "Use a correlated subquery: `WHERE price = (SELECT MAX(price) FROM products p2 WHERE p2.category = products.category)`.",
     solution: "SELECT category, product_name, price FROM products WHERE price = (SELECT MAX(price) FROM products p2 WHERE p2.category = products.category) ORDER BY price DESC;",
     difficulty: "hard"
+  },
+  {
+    id: "sql-groupby-multi-26",
+    chapter: 3,
+    topic: "GROUP BY",
+    title: "Average Age and Salary by Department",
+    prompt: "Select the `dept_id`, count of employees (as `emp_count`), average age (as `avg_age`), and average salary (as `avg_salary`) grouped by `dept_id`. Sort by `dept_id` ascending.",
+    starterCode: "-- Group by dept_id and get multiple stats\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 5, msg: "Result must contain 5 department groups" },
+      { rule: (result) => result && result[0].values[0][1] === 3 && Math.abs(result[0].values[0][3] - 75666.67) < 0.1, msg: "Dept 1 stats must match: 3 employees and avg salary 75666.67" }
+    ],
+    hint: "Use SELECT dept_id, COUNT(*) AS emp_count, AVG(age) AS avg_age, AVG(salary) AS avg_salary FROM employees GROUP BY dept_id ORDER BY dept_id;",
+    solution: "SELECT dept_id, COUNT(*) AS emp_count, AVG(age) AS avg_age, AVG(salary) AS avg_salary FROM employees GROUP BY dept_id ORDER BY dept_id;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-coalesce-nulls-27",
+    chapter: 10,
+    topic: "NULL Handling",
+    title: "Replace Null Manager IDs",
+    prompt: "Select the department name (`dept_name`) and their manager ID. If the manager ID is NULL, return -1 instead. Name the manager column `manager_id_filled`.",
+    starterCode: "-- Replace NULL manager IDs with -1\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns.includes('manager_id_filled'), msg: "Column must be named manager_id_filled" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 'Finance' && row[1] === -1), msg: "Finance manager_id_filled must be -1" }
+    ],
+    hint: "Use COALESCE(manager_id, -1) AS manager_id_filled.",
+    solution: "SELECT dept_name, COALESCE(manager_id, -1) AS manager_id_filled FROM departments;",
+    difficulty: "easy"
+  },
+  {
+    id: "sql-cte-expression-28",
+    chapter: 13,
+    topic: "CTEs",
+    title: "High-Earning Employee CTE",
+    prompt: "Write a Common Table Expression (CTE) named `HighEarners` that selects all employees with a salary greater than 90,000. Then, query the CTE to retrieve the employee `name` and their department `dept_name` by joining with the `departments` table.",
+    starterCode: "-- Use WITH HighEarners AS (...) select from HighEarners join departments\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 3, msg: "Should find exactly 3 high earners (> 90000)" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 'Alice Smith' && row[1] === 'Engineering'), msg: "Alice Smith in Engineering must be returned" }
+    ],
+    hint: "WITH HighEarners AS (SELECT * FROM employees WHERE salary > 90000) SELECT h.name, d.dept_name FROM HighEarners h JOIN departments d ON h.dept_id = d.dept_id;",
+    solution: "WITH HighEarners AS (SELECT * FROM employees WHERE salary > 90000) SELECT h.name, d.dept_name FROM HighEarners h JOIN departments d ON h.dept_id = d.dept_id;",
+    difficulty: "hard"
+  },
+  {
+    id: "sql-case-statement-29",
+    chapter: 14,
+    topic: "CASE Statements",
+    title: "Salary Category Bracket",
+    prompt: "Select employee `name`, `salary`, and a new column named `salary_bracket`. Set `salary_bracket` to 'High' if salary is greater than 100,000, 'Medium' if between 80,000 and 100,000 (inclusive), and 'Low' otherwise. Sort by salary descending.",
+    starterCode: "-- Categorize employee salaries into brackets\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values[0][2] === 'High' && result[0].values[1][2] === 'High', msg: "Top two earners must be High bracket" },
+      { rule: (result) => result && result[0].values.some(r => r[0] === 'Bob Jones' && r[2] === 'Low'), msg: "Bob Jones earning 72000 should be in Low bracket" }
+    ],
+    hint: "Use CASE WHEN salary > 100000 THEN 'High' WHEN salary >= 80000 THEN 'Medium' ELSE 'Low' END AS salary_bracket.",
+    solution: "SELECT name, salary, CASE WHEN salary > 100000 THEN 'High' WHEN salary >= 80000 THEN 'Medium' ELSE 'Low' END AS salary_bracket FROM employees ORDER BY salary DESC;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-exists-subquery-30",
+    chapter: 15,
+    topic: "EXISTS Subquery",
+    title: "Customers with Active Orders",
+    prompt: "Select the `customer_name` and `city` of all customers who have placed at least one order. Use the `EXISTS` operator.",
+    starterCode: "-- Use EXISTS to find customers with orders\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 5, msg: "All 5 customers in the database have orders, so all 5 must be returned" }
+    ],
+    hint: "Use EXISTS (SELECT 1 FROM orders WHERE orders.customer_id = customers.customer_id).",
+    solution: "SELECT customer_name, city FROM customers c WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id);",
+    difficulty: "hard"
+  },
+  {
+    id: "sql-like-combos-31",
+    chapter: 16,
+    topic: "LIKE Operator",
+    title: "Wildcard Text Match Combo",
+    prompt: "Select all employees whose name starts with the letter 'H' or contains 'Smith'. Retrieve only their `name`.",
+    starterCode: "-- Match names starting with H or containing Smith\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 2, msg: "Result must return exactly 2 employees (Alice Smith and Henry Ford)" }
+    ],
+    hint: "Use name LIKE 'H%' OR name LIKE '%Smith%'.",
+    solution: "SELECT name FROM employees WHERE name LIKE 'H%' OR name LIKE '%Smith%';",
+    difficulty: "easy"
+  },
+  {
+    id: "sql-date-functions-32",
+    chapter: 17,
+    topic: "Date Functions",
+    title: "Hire Date Year Extraction",
+    prompt: "Extract the year of hiring from the `hire_date` column for all employees. Return employee `name` and the hiring year as `hire_year`. Sort by `hire_year` ascending.",
+    starterCode: "-- Extract year from date string YYYY-MM-DD\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values[0][1] === '2015', msg: "First employee (Henry Ford) was hired in 2015" }
+    ],
+    hint: "Use strftime('%Y', hire_date) or substr(hire_date, 1, 4).",
+    solution: "SELECT name, strftime('%Y', hire_date) AS hire_year FROM employees ORDER BY hire_year ASC;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-self-join-33",
+    chapter: 17,
+    topic: "Self Joins",
+    title: "Employee-Manager Relationships",
+    prompt: "Join the `departments` and `employees` tables to show each employee `name` alongside their department's manager `name` (as `manager_name`). Only include employees whose department has a manager.",
+    starterCode: "-- Show employee and their manager names\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 7, msg: "Should find 7 employees in departments with active managers (excluding Finance)" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 'Bob Jones' && row[1] === 'Alice Smith'), msg: "Bob Jones manager must be Alice Smith" }
+    ],
+    hint: "Join employees to departments on dept_id, then departments to employees again on manager_id.",
+    solution: "SELECT e.name, m.name AS manager_name FROM employees e INNER JOIN departments d ON e.dept_id = d.dept_id INNER JOIN employees m ON d.manager_id = m.emp_id;",
+    difficulty: "hard"
+  },
+  {
+    id: "sql-concat-cols-34",
+    chapter: 16,
+    topic: "String Concatenation",
+    title: "Format Customer Location",
+    prompt: "Select customer `customer_name` and concatenate their `city` and `country` together in the format: 'City, Country' (e.g. 'New York, USA'). Name this column `location`.",
+    starterCode: "-- Concatenate city and country columns\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values[0][1] === 'New York, USA', msg: "First row location must format 'New York, USA' correctly" }
+    ],
+    hint: "Use || operator: city || ', ' || country AS location.",
+    solution: "SELECT customer_name, (city || ', ' || country) AS location FROM customers;",
+    difficulty: "easy"
+  },
+  {
+    id: "sql-row-number-35",
+    chapter: 18,
+    topic: "Window Functions",
+    title: "Rank Salaries in Department",
+    prompt: "Assign a unique rank (`ROW_NUMBER`) to each employee within their department based on salary in descending order. Output employee `name`, `dept_id`, `salary`, and the rank as `salary_rank`.",
+    starterCode: "-- Use ROW_NUMBER() OVER (...)\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns.includes('salary_rank'), msg: "Rank column must be named salary_rank" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 'Bob Jones' && row[1] === 1 && row[3] === 2), msg: "Bob Jones must be rank 2 in dept 1 (salary 72000 vs Alice 95000)" }
+    ],
+    hint: "Use ROW_NUMBER() OVER (PARTITION BY dept_id ORDER BY salary DESC) AS salary_rank.",
+    solution: "SELECT name, dept_id, salary, ROW_NUMBER() OVER (PARTITION BY dept_id ORDER BY salary DESC) AS salary_rank FROM employees;",
+    difficulty: "hard"
+  },
+  {
+    id: "sql-having-multi-36",
+    chapter: 9,
+    topic: "HAVING Clause",
+    title: "Departments with High Average Salary",
+    prompt: "Retrieve `dept_id` and the average salary as `avg_salary` for departments that have more than 2 employees AND an average salary greater than 70,000.",
+    starterCode: "-- Retrieve departments with > 2 employees and avg salary > 70000\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 1 && result[0].values[0][0] === 1, msg: "Only dept_id 1 (Engineering) has > 2 employees and avg salary > 70000" }
+    ],
+    hint: "Group by dept_id and filter in HAVING COUNT(*) > 2 AND AVG(salary) > 70000.",
+    solution: "SELECT dept_id, AVG(salary) AS avg_salary FROM employees GROUP BY dept_id HAVING COUNT(*) > 2 AND AVG(salary) > 70000;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-union-all-37",
+    chapter: 13,
+    topic: "UNION",
+    title: "Combine Employee and Customer Names",
+    prompt: "Combine names from `employees` (retrieved as `name`) and `customers` (retrieved as `customer_name`) into a single output column named `all_names`. Sort the combined list alphabetically.",
+    starterCode: "-- Combine names using UNION\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 13, msg: "Combined set must contain exactly 13 names (8 employees + 5 customers)" },
+      { rule: (result) => result && result[0].values[0][0] === 'Alice Smith', msg: "Names must be sorted alphabetically ascending" }
+    ],
+    hint: "Use SELECT name AS all_names FROM employees UNION SELECT customer_name AS all_names FROM customers ORDER BY all_names;",
+    solution: "SELECT name AS all_names FROM employees UNION SELECT customer_name AS all_names FROM customers ORDER BY all_names;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-left-join-null-38",
+    chapter: 10,
+    topic: "JOINS & NULLs",
+    title: "Customers with No Orders",
+    prompt: "Identify customers who have never placed an order. Return their `customer_name` using a `LEFT JOIN` and checking for `NULL` order details.",
+    starterCode: "-- Customers with no orders\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 0, msg: "All mock customers have orders in our seed dataset, so this should return an empty result" }
+    ],
+    hint: "Use LEFT JOIN and WHERE orders.order_id IS NULL.",
+    solution: "SELECT c.customer_name FROM customers c LEFT JOIN orders o ON c.customer_id = o.customer_id WHERE o.order_id IS NULL;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-view-creation-39",
+    chapter: 13,
+    topic: "Subqueries & Views",
+    title: "Employee Salary Rankings View",
+    prompt: "Find employee names and their salaries for employees earning more than the salary of Bob Jones (which is 72,000).",
+    starterCode: "-- Find employees earning more than Bob Jones\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 4, msg: "Exactly 4 employees earn more than Bob Jones" }
+    ],
+    hint: "Use subquery for Bob Jones salary: WHERE salary > (SELECT salary FROM employees WHERE name = 'Bob Jones').",
+    solution: "SELECT name, salary FROM employees WHERE salary > (SELECT salary FROM employees WHERE name = 'Bob Jones');",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-dense-rank-40",
+    chapter: 18,
+    topic: "Window Functions",
+    title: "Dense Rank Salaries",
+    prompt: "Compute a dense rank of employee salaries across the entire company. Retrieve `name`, `salary`, and the rank as `salary_rank` sorted by rank ascending (the highest salary gets rank 1).",
+    starterCode: "-- Rank salaries with DENSE_RANK()\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values[0][0] === 'Henry Ford' && result[0].values[0][2] === 1, msg: "Henry Ford must have rank 1" }
+    ],
+    hint: "Use DENSE_RANK() OVER (ORDER BY salary DESC) AS salary_rank.",
+    solution: "SELECT name, salary, DENSE_RANK() OVER (ORDER BY salary DESC) AS salary_rank FROM employees;",
+    difficulty: "hard"
   }
 ];
 
