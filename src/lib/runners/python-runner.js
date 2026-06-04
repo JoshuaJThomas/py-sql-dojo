@@ -27,7 +27,7 @@ export function loadPyodideInstance() {
   return pyodidePromise;
 }
 
-export async function runPythonCode(code, checkAsserts, context = {}) {
+export async function runPythonCode(preludeCode, code, checks = []) {
   const pyodide = await loadPyodideInstance();
 
   // Reset globals/variables in the pyodide namespace
@@ -42,26 +42,16 @@ export async function runPythonCode(code, checkAsserts, context = {}) {
     }
   });
 
-  // Inject context variables (e.g. list variables like nums, scores or dataframes like df)
-  for (const [key, value] of Object.entries(context)) {
-    // If it's a pandas DataFrame, we can load pandas and create it in Pyodide
-    if (value && typeof value === 'object' && !Array.isArray(value) && value.columns && value.data) {
-      await pyodide.loadPackage("pandas");
-      const jsonStr = JSON.stringify(value);
-      pyodide.runPython(`import pandas as pd; import json; ${key} = pd.read_json(json.dumps(${jsonStr}))`);
-    } else if (Array.isArray(value)) {
-      // Inject array/list
-      pyodide.globals.set(key, pyodide.toPy(value));
-    } else {
-      pyodide.globals.set(key, value);
-    }
-  }
-
   let error = null;
   let success = false;
 
   try {
-    // Run the main solution code
+    // 1. Run the prelude code to define inputs (like nums, matrix, df, X, y)
+    if (preludeCode) {
+      await pyodide.runPythonAsync(preludeCode);
+    }
+    
+    // 2. Run the user's code
     await pyodide.runPythonAsync(code);
     success = true;
   } catch (err) {
@@ -69,18 +59,39 @@ export async function runPythonCode(code, checkAsserts, context = {}) {
     success = false;
   }
 
-  // If code executed without syntax error, run checks
-  let checksPassed = false;
-  let checkError = null;
+  // 3. Evaluate each check assertion individually
+  let checksResults = [];
+  let checksPassed = true;
 
-  if (success && checkAsserts) {
+  if (success && checks.length > 0) {
     try {
-      // Run the check block (assertion checks)
-      await pyodide.runPythonAsync(checkAsserts);
-      checksPassed = true;
+      // Inject checks array as a JSON string to Pyodide
+      pyodide.globals.set("__checks_json_str__", JSON.stringify(checks));
+      
+      const evaluatorCode = `
+import json
+__checks_list__ = json.loads(__checks_json_str__)
+__results_list__ = []
+
+for c in __checks_list__:
+    try:
+        # Run the assertion in the global scope
+        exec(c['test'], globals())
+        __results_list__.append({"passed": True, "msg": c["msg"]})
+    except Exception as e:
+        __results_list__.append({"passed": False, "msg": c["msg"] + " (" + str(type(e).__name__) + ": " + str(e) + ")"})
+
+__results_json__ = json.dumps(__results_list__)
+`;
+      await pyodide.runPythonAsync(evaluatorCode);
+      
+      const resultsJson = pyodide.globals.get("__results_json__");
+      checksResults = JSON.parse(resultsJson);
+      checksPassed = checksResults.every(r => r.passed);
     } catch (err) {
-      checkError = err.message;
+      console.error("Dojo check runner failed: ", err);
       checksPassed = false;
+      checksResults = [{ passed: false, msg: `Dojo Test Harness Error: ${err.message}` }];
     }
   }
 
@@ -89,6 +100,6 @@ export async function runPythonCode(code, checkAsserts, context = {}) {
     stdout: stdoutContent,
     error,
     checksPassed,
-    checkError
+    checksResults
   };
 }

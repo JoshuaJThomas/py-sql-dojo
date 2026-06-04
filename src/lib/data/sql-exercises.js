@@ -69,12 +69,11 @@ export const sqlExercises = [
     title: "Select All Employees",
     prompt: "Retrieve all records and columns from the `employees` table.",
     starterCode: "-- Write your SQL query here\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const columns = result[0].columns;
-      const values = result[0].values;
-      return columns.includes('name') && columns.includes('salary') && values.length === 8;
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns.includes('name') && result[0].columns.includes('salary'), msg: "Result must contain the 'name' and 'salary' columns" },
+      { rule: (result) => result && result[0].values.length === 8, msg: "Result must return exactly 8 employee rows" }
+    ],
     hint: "Use `SELECT * FROM employees;`",
     solution: "SELECT * FROM employees;",
     difficulty: "easy"
@@ -86,12 +85,12 @@ export const sqlExercises = [
     title: "Select Specific Columns",
     prompt: "Retrieve only the `name` and `salary` columns for all employees.",
     starterCode: "-- Select name and salary from employees\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const columns = result[0].columns;
-      const values = result[0].values;
-      return columns.length === 2 && columns.includes('name') && columns.includes('salary') && values.length === 8;
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns.length === 2, msg: "Result must contain exactly 2 columns" },
+      { rule: (result) => result && result[0].columns.includes('name') && result[0].columns.includes('salary'), msg: "Result must contain only 'name' and 'salary' columns" },
+      { rule: (result) => result && result[0].values.length === 8, msg: "Result must return 8 rows" }
+    ],
     hint: "Use `SELECT name, salary FROM employees;`",
     solution: "SELECT name, salary FROM employees;",
     difficulty: "easy"
@@ -103,11 +102,11 @@ export const sqlExercises = [
     title: "Filter by Salary",
     prompt: "Select the `name` and `salary` of all employees who earn more than 80,000.",
     starterCode: "-- Select employees earning > 80000\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const values = result[0].values;
-      return values.length === 4 && values.every(row => row[1] > 80000);
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 4, msg: "Result must contain exactly 4 matching employees" },
+      { rule: (result) => result && result[0].values.every(row => row[1] > 80000), msg: "All returned employees must have a salary greater than 80000" }
+    ],
     hint: "Use `SELECT name, salary FROM employees WHERE salary > 80000;`",
     solution: "SELECT name, salary FROM employees WHERE salary > 80000;",
     difficulty: "easy"
@@ -119,11 +118,11 @@ export const sqlExercises = [
     title: "Compound Conditions",
     prompt: "Select the `name`, `age`, and `salary` of all employees who are over 30 years old AND earn more than 80,000.",
     starterCode: "-- Select employees over 30 and earning > 80000\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const values = result[0].values;
-      return values.length === 3 && values.every(row => row[1] > 30 && row[2] > 80000);
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 3, msg: "Result must contain exactly 3 matching rows" },
+      { rule: (result) => result && result[0].values.every(row => row[1] > 30 && row[2] > 80000), msg: "All returned rows must satisfy age > 30 and salary > 80000" }
+    ],
     hint: "Use `SELECT name, age, salary FROM employees WHERE age > 30 AND salary > 80000;`",
     solution: "SELECT name, age, salary FROM employees WHERE age > 30 AND salary > 80000;",
     difficulty: "easy"
@@ -135,11 +134,11 @@ export const sqlExercises = [
     title: "Find Matching Customers",
     prompt: "Select the `customer_name` and `city` of all customers whose name contains the word 'Giant'.",
     starterCode: "-- Select customers with 'Giant' in their name\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const values = result[0].values;
-      return values.length === 1 && values[0][0] === 'RetailGiant';
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 1, msg: "Result must contain exactly 1 customer" },
+      { rule: (result) => result && result[0].values[0][0] === 'RetailGiant', msg: "Selected customer must be 'RetailGiant'" }
+    ],
     hint: "Use the `LIKE` operator with the wildcard character `%`. For example: `WHERE customer_name LIKE '%Giant%'`.",
     solution: "SELECT customer_name, city FROM customers WHERE customer_name LIKE '%Giant%';",
     difficulty: "easy"
@@ -151,17 +150,19 @@ export const sqlExercises = [
     title: "Order by Salary & Name",
     prompt: "List all employees (retrieve their `name` and `salary`) ordered by their `salary` in descending order. For employees with the same salary, order them by `name` alphabetically (ascending).",
     starterCode: "-- Order employees by salary DESC, name ASC\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const values = result[0].values;
-      if (values.length !== 8) return false;
-      let ok = true;
-      for (let i = 0; i < values.length - 1; i++) {
-        if (values[i][1] < values[i+1][1]) ok = false;
-        if (values[i][1] === values[i+1][1] && values[i][0] > values[i+1][0]) ok = false;
-      }
-      return ok;
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 8, msg: "Result must return 8 rows" },
+      { rule: (result) => {
+        if (!result) return false;
+        const vals = result[0].values;
+        for (let i = 0; i < vals.length - 1; i++) {
+          if (vals[i][1] < vals[i+1][1]) return false;
+          if (vals[i][1] === vals[i+1][1] && vals[i][0] > vals[i+1][0]) return false;
+        }
+        return true;
+      }, msg: "Result is not correctly ordered by salary descending and name ascending on ties" }
+    ],
     hint: "Use `ORDER BY salary DESC, name ASC;`",
     solution: "SELECT name, salary FROM employees ORDER BY salary DESC, name ASC;",
     difficulty: "easy"
@@ -173,10 +174,11 @@ export const sqlExercises = [
     title: "Count Employees",
     prompt: "Count the total number of employees in the company. Name the result column `total_employees`.",
     starterCode: "-- Count total employees\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      return result[0].values[0][0] === 8 && result[0].columns[0] === 'total_employees';
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns[0] === 'total_employees', msg: "Result column must be named 'total_employees'" },
+      { rule: (result) => result && result[0].values[0][0] === 8, msg: "Count should be exactly 8" }
+    ],
     hint: "Use `SELECT COUNT(*) AS total_employees FROM employees;`",
     solution: "SELECT COUNT(*) AS total_employees FROM employees;",
     difficulty: "easy"
@@ -188,11 +190,15 @@ export const sqlExercises = [
     title: "Average Salary by Department",
     prompt: "Find the average salary for each department ID in the `employees` table. Output two columns: `dept_id` and the average salary as `avg_salary`.",
     starterCode: "-- Group by dept_id and get average salary\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const values = result[0].values;
-      return values.length === 5 && values.some(row => row[0] === 1 && Math.abs(row[1] - 75666.67) < 0.1);
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns.includes('dept_id') && result[0].columns.includes('avg_salary'), msg: "Result must include columns 'dept_id' and 'avg_salary'" },
+      { rule: (result) => {
+        if (!result) return false;
+        const vals = result[0].values;
+        return vals.length === 5 && vals.some(row => row[0] === 1 && Math.abs(row[1] - 75666.67) < 0.1);
+      }, msg: "Aggregated average salaries per department are not correct" }
+    ],
     hint: "Use `SELECT dept_id, AVG(salary) AS avg_salary FROM employees GROUP BY dept_id;`",
     solution: "SELECT dept_id, AVG(salary) AS avg_salary FROM employees GROUP BY dept_id;",
     difficulty: "medium"
@@ -204,11 +210,11 @@ export const sqlExercises = [
     title: "Filter Groups by Total Salary",
     prompt: "List all department IDs (`dept_id`) where the total salary expense (SUM) is greater than 150,000. Name the sum column `total_expense`.",
     starterCode: "-- Sum salaries by dept and filter using HAVING\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const values = result[0].values;
-      return values.length === 2 && values.every(row => row[1] > 150000);
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns.includes('total_expense'), msg: "Sum column must be named 'total_expense'" },
+      { rule: (result) => result && result[0].values.length === 2 && result[0].values.every(row => row[1] > 150000), msg: "Output must contain only department IDs where the total salary is > 150000" }
+    ],
     hint: "Remember that `WHERE` filters rows before grouping, and `HAVING` filters groups after grouping. Use `GROUP BY dept_id HAVING SUM(salary) > 150000;`",
     solution: "SELECT dept_id, SUM(salary) AS total_expense FROM employees GROUP BY dept_id HAVING SUM(salary) > 150000;",
     difficulty: "medium"
@@ -220,12 +226,11 @@ export const sqlExercises = [
     title: "Inner Join Employees & Departments",
     prompt: "Perform an INNER JOIN between `employees` and `departments` to retrieve the employee's `name` and their department's `dept_name`.",
     starterCode: "-- Join employees and departments\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const cols = result[0].columns;
-      const vals = result[0].values;
-      return cols.includes('name') && cols.includes('dept_name') && vals.length === 8;
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns.includes('name') && result[0].columns.includes('dept_name'), msg: "Result must contain columns 'name' and 'dept_name'" },
+      { rule: (result) => result && result[0].values.length === 8, msg: "Result must contain exactly 8 employee rows" }
+    ],
     hint: "Join the tables on the matching department IDs: `ON employees.dept_id = departments.dept_id`.",
     solution: "SELECT e.name, d.dept_name FROM employees e INNER JOIN departments d ON e.dept_id = d.dept_id;",
     difficulty: "medium"
@@ -237,11 +242,15 @@ export const sqlExercises = [
     title: "Left Join Department Employee Count",
     prompt: "Retrieve a list of all department names (`dept_name`) along with the count of employees in that department (as `employee_count`). Include departments that currently have 0 employees in the result.",
     starterCode: "-- Include all departments in employee count list\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const vals = result[0].values;
-      return vals.length === 5 && vals.some(row => row[0] === 'HR' && row[1] === 1) && vals.some(row => row[0] === 'Finance' && row[1] === 0);
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 5, msg: "Result must contain all 5 departments" },
+      { rule: (result) => {
+        if (!result) return false;
+        const vals = result[0].values;
+        return vals.some(row => row[0] === 'HR' && row[1] === 1) && vals.some(row => row[0] === 'Finance' && row[1] === 0);
+      }, msg: "Aggregated count should show 1 for HR and 0 for Finance" }
+    ],
     hint: "Use `LEFT JOIN departments d ON d.dept_id = e.dept_id` (or start with departments and LEFT JOIN employees). Use `COUNT(e.emp_id)` instead of `COUNT(*)` so that departments with no employees return 0 instead of 1.",
     solution: "SELECT d.dept_name, COUNT(e.emp_id) AS employee_count FROM departments d LEFT JOIN employees e ON d.dept_id = e.dept_id GROUP BY d.dept_name;",
     difficulty: "hard"
@@ -253,11 +262,11 @@ export const sqlExercises = [
     title: "Employees Earning Above Average",
     prompt: "Find the name and salary of all employees who earn more than the average salary of all employees.",
     starterCode: "-- Find employees earning > average salary\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const vals = result[0].values;
-      return vals.length === 4 && vals.every(row => row[1] > 83125);
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 4, msg: "Result must contain exactly 4 matching employees" },
+      { rule: (result) => result && result[0].values.every(row => row[1] > 83125), msg: "All returned employees must earn more than 83125" }
+    ],
     hint: "Use a subquery in the `WHERE` clause: `WHERE salary > (SELECT AVG(salary) FROM employees)`.",
     solution: "SELECT name, salary FROM employees WHERE salary > (SELECT AVG(salary) FROM employees);",
     difficulty: "medium"
@@ -269,11 +278,11 @@ export const sqlExercises = [
     title: "Multi-Table Join Filter",
     prompt: "Retrieve the `order_id`, `customer_name`, and `total_amount` for all orders placed by customers from the 'USA' or 'UK'.",
     starterCode: "-- Order details for US/UK customers\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const vals = result[0].values;
-      return vals.length === 5 && vals.every(row => row[1] === 'TechCorp' || row[1] === 'RetailGiant');
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 5, msg: "Result must contain exactly 5 order rows" },
+      { rule: (result) => result && result[0].values.every(row => row[1] === 'TechCorp' || row[1] === 'RetailGiant'), msg: "All returned orders must correspond to customers TechCorp or RetailGiant" }
+    ],
     hint: "Join `orders` and `customers` on `customer_id` and use `WHERE country IN ('USA', 'UK')`.",
     solution: "SELECT o.order_id, c.customer_name, o.total_amount FROM orders o INNER JOIN customers c ON o.customer_id = c.customer_id WHERE c.country IN ('USA', 'UK');",
     difficulty: "medium"
@@ -285,11 +294,11 @@ export const sqlExercises = [
     title: "Highest Revenue City",
     prompt: "Find the city that has generated the highest total revenue (sum of order amounts) from customer orders. Output the `city` and the `total_revenue`.",
     starterCode: "-- Find city with maximum order revenue\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const vals = result[0].values;
-      return vals.length === 1 && vals[0][0] === 'New York' && Math.abs(vals[0][1] - 15200.5) < 0.1;
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 1, msg: "Result must contain exactly 1 city" },
+      { rule: (result) => result && result[0].values[0][0] === 'New York' && Math.abs(result[0].values[0][1] - 15200.5) < 0.1, msg: "Selected city must be 'New York' with revenue 15200.5" }
+    ],
     hint: "Join `orders` with `customers`, group by `city`, sum the `total_amount`, order by the sum descending, and use `LIMIT 1`.",
     solution: "SELECT c.city, SUM(o.total_amount) AS total_revenue FROM orders o INNER JOIN customers c ON o.customer_id = c.customer_id GROUP BY c.city ORDER BY total_revenue DESC LIMIT 1;",
     difficulty: "hard"
@@ -301,11 +310,11 @@ export const sqlExercises = [
     title: "Department Managers & Salaries",
     prompt: "Retrieve the `dept_name` along with the manager's `name` and `salary` for all departments that have an assigned manager.",
     starterCode: "-- Find managers' names and salaries by department\n",
-    check: (result) => {
-      if (!result || result.length === 0) return false;
-      const vals = result[0].values;
-      return vals.length === 4 && vals.some(row => row[0] === 'Engineering' && row[1] === 'Alice Smith' && row[2] === 95000);
-    },
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 4, msg: "Result must contain exactly 4 departments with managers" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 'Engineering' && row[1] === 'Alice Smith' && row[2] === 95000), msg: "Selected department managers details must be correct" }
+    ],
     hint: "Join `departments d` with `employees e` on `d.manager_id = e.emp_id`.",
     solution: "SELECT d.dept_name, e.name, e.salary FROM departments d INNER JOIN employees e ON d.manager_id = e.emp_id;",
     difficulty: "hard"
