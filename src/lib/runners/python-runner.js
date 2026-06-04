@@ -74,12 +74,52 @@ __checks_list__ = json.loads(__checks_json_str__)
 __results_list__ = []
 
 for c in __checks_list__:
+    test_str = c['test']
+    actual_val = None
+    has_actual = False
+    expected_val = None
+    has_expected = False
+    
+    if "==" in test_str:
+        try:
+            lhs, rhs = test_str.split("==", 1)
+            e_val = eval(rhs.strip(), globals())
+            expected_val = repr(e_val)
+            has_expected = True
+        except:
+            pass
+
     try:
         # Run the assertion in the global scope
-        exec(c['test'], globals())
-        __results_list__.append({"passed": True, "msg": c["msg"]})
+        exec(test_str, globals())
+        __results_list__.append({
+            "passed": True, 
+            "msg": c["msg"]
+        })
     except Exception as e:
-        __results_list__.append({"passed": False, "msg": c["msg"] + " (" + str(type(e).__name__) + ": " + str(e) + ")"})
+        if "==" in test_str:
+            try:
+                lhs, rhs = test_str.split("==", 1)
+                a_val = eval(lhs.strip(), globals())
+                if callable(a_val):
+                    actual_val = f"<function {a_val.__name__}>"
+                else:
+                    actual_val = repr(a_val)
+                has_actual = True
+            except Exception as eval_err:
+                actual_val = f"<Error evaluating output: {type(eval_err).__name__}>"
+                has_actual = True
+        
+        __results_list__.append({
+            "passed": False, 
+            "msg": c["msg"],
+            "error_type": type(e).__name__,
+            "error_detail": str(e),
+            "actual": actual_val,
+            "has_actual": has_actual,
+            "expected": expected_val,
+            "has_expected": has_expected
+        })
 
 __results_json__ = json.dumps(__results_list__)
 `;
