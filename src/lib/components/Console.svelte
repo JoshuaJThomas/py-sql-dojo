@@ -10,14 +10,76 @@
     queryResult = null,
     dbState = {},
     hasRun = false,
-    isRunning = false
+    isRunning = false,
+    executionTime = null
   } = $props();
 
   let activeTab = $state('console'); // 'console' | 'table-data'
   let activeTablePreview = $state('');
   let consoleBodyRef = $state(null);
 
+  // Sorting & Pagination states for SQL results
+  let sortColumn = $state(null);
+  let sortDirection = $state('asc');
+  let currentPage = $state(1);
+  const pageSize = 10;
+
   let tableList = $derived(Object.keys(dbState));
+
+  // Reset sorting and page when queryResult changes
+  $effect(() => {
+    if (queryResult) {
+      sortColumn = null;
+      sortDirection = 'asc';
+      currentPage = 1;
+    }
+  });
+
+  // Derived properties for SQL results
+  let queryColumns = $derived(queryResult && queryResult.length > 0 ? queryResult[0].columns : []);
+  let queryRawValues = $derived(queryResult && queryResult.length > 0 ? queryResult[0].values : []);
+
+  let sortedValuesList = $derived.by(() => {
+    if (sortColumn === null) return queryRawValues;
+    const sorted = [...queryRawValues];
+    const colIdx = queryColumns.indexOf(sortColumn);
+    if (colIdx === -1) return queryRawValues;
+
+    sorted.sort((a, b) => {
+      const valA = a[colIdx];
+      const valB = b[colIdx];
+
+      if (valA === null) return sortDirection === 'asc' ? -1 : 1;
+      if (valB === null) return sortDirection === 'asc' ? 1 : -1;
+
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortDirection === 'asc' ? valA - valB : valB - valA;
+      }
+      const strA = String(valA).toLowerCase();
+      const strB = String(valB).toLowerCase();
+      return sortDirection === 'asc' 
+        ? strA.localeCompare(strB) 
+        : strB.localeCompare(strA);
+    });
+    return sorted;
+  });
+
+  let totalPages = $derived(Math.max(1, Math.ceil(sortedValuesList.length / pageSize)));
+  let paginatedValuesList = $derived(sortedValuesList.slice((currentPage - 1) * pageSize, currentPage * pageSize));
+
+  function toggleSort(columnName) {
+    if (sortColumn === columnName) {
+      if (sortDirection === 'asc') {
+        sortDirection = 'desc';
+      } else {
+        sortColumn = null;
+      }
+    } else {
+      sortColumn = columnName;
+      sortDirection = 'asc';
+    }
+    currentPage = 1;
+  }
 
   // Auto-set the first preview table when tables list updates
   $effect(() => {
@@ -135,6 +197,11 @@
     </div>
 
     <div class="console-header-actions">
+      {#if hasRun && executionTime !== null && executionTime !== undefined}
+        <span class="execution-time-indicator" title="Sandbox execution duration">
+          ⏱️ {executionTime.toFixed(1)} ms
+        </span>
+      {/if}
       {#if hasRun && (stdout || error || (type === 'sql' && queryResult))}
         <button class="console-action-btn" onclick={downloadConsoleLogs} title="Download console logs">
           <Download size={11} />
@@ -245,13 +312,22 @@
                   <table>
                     <thead>
                       <tr>
-                        {#each queryResult[0].columns as col}
-                          <th>{col}</th>
+                        {#each queryColumns as col}
+                          <th onclick={() => toggleSort(col)} style="cursor: pointer; user-select: none;">
+                            <div class="th-content">
+                              <span>{col}</span>
+                              {#if sortColumn === col}
+                                <span class="sort-arrow">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                              {:else}
+                                <span class="sort-arrow-placeholder">↕</span>
+                              {/if}
+                            </div>
+                          </th>
                         {/each}
                       </tr>
                     </thead>
                     <tbody>
-                      {#each queryResult[0].values as row}
+                      {#each paginatedValuesList as row}
                         <tr>
                           {#each row as cell}
                             <td>{cell === null ? 'NULL' : cell}</td>
@@ -261,7 +337,30 @@
                     </tbody>
                   </table>
                 </div>
-                <span class="row-count">{queryResult[0].values.length} rows returned.</span>
+                <div class="table-footer-controls">
+                  <span class="row-count">{queryRawValues.length} rows returned.</span>
+                  {#if queryRawValues.length > pageSize}
+                    <div class="pagination-bar">
+                      <button 
+                        class="pag-btn" 
+                        disabled={currentPage === 1} 
+                        onclick={() => currentPage = Math.max(1, currentPage - 1)}
+                      >
+                        Prev
+                      </button>
+                      <span class="pag-info">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button 
+                        class="pag-btn" 
+                        disabled={currentPage === totalPages} 
+                        onclick={() => currentPage = Math.min(totalPages, currentPage + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  {/if}
+                </div>
 
                 <!-- SQL Test Cases Checklist -->
                 <div class="assertion-section" style="margin-top: 10px;">
@@ -772,5 +871,89 @@
   .loading-sub-text {
     font-size: 11px;
     color: var(--color-muted);
+  }
+
+  /* Data Table Header Sorting and Pagination styling */
+  .th-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .sort-arrow {
+    color: var(--color-primary);
+    font-size: 10px;
+  }
+
+  .sort-arrow-placeholder {
+    color: var(--color-muted);
+    opacity: 0.3;
+    font-size: 10px;
+    transition: opacity 0.2s;
+  }
+
+  th:hover .sort-arrow-placeholder {
+    opacity: 0.8;
+  }
+
+  .table-footer-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 4px;
+  }
+
+  .pagination-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .pag-btn {
+    background: var(--color-tab-inactive);
+    border: 1px solid var(--color-hairline);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .pag-btn:hover:not(:disabled) {
+    background: var(--color-canvas);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .pag-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .pag-info {
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--color-muted);
+    font-weight: 500;
+  }
+
+  .execution-time-indicator {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-muted);
+    background: var(--color-editor-bg);
+    border: 1px solid var(--color-hairline);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 4px;
   }
 </style>

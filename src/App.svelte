@@ -50,7 +50,8 @@
     Code,
     Star,
     Shield,
-    Flame
+    Flame,
+    BookOpen
   } from 'lucide-svelte';
 
   // State
@@ -109,8 +110,9 @@
   // Runner state
   let isRunning = $state(false);
   let hasRun = $state(false);
-  let pyResult = $state({ success: false, stdout: '', error: '', checksPassed: false, checksResults: [] });
-  let sqlResult = $state({ success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [] });
+  let pyResult = $state({ success: false, stdout: '', error: '', checksPassed: false, checksResults: [], executionTime: null });
+  let sqlResult = $state({ success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [], executionTime: null });
+  let showCheatSheet = $state(false);
 
   // UI state
   let showHint = $state(false);
@@ -347,6 +349,7 @@
   async function runCode() {
     isRunning = true;
     hasRun = true;
+    const startTime = performance.now();
 
     if (isSandboxMode) {
       recordSandboxRun(activeLang, code);
@@ -355,7 +358,8 @@
     if (activeLang === 'python') {
       const oldLevel = get(level);
       const outcome = await runPythonCode(currentChallenge.prelude, code, currentChallenge.checks);
-      pyResult = outcome;
+      const endTime = performance.now();
+      pyResult = { ...outcome, executionTime: endTime - startTime };
 
       if (!isSandboxMode && outcome.success && outcome.checksPassed) {
         const newlyUnlocked = completeChallenge(currentChallenge.id, currentChallenge.difficulty);
@@ -383,7 +387,8 @@
     } else {
       const seedToUse = (isSandboxMode && customDdlSeed.trim()) ? customDdlSeed : sqlDbSeed;
       const outcome = await runSqlQuery(seedToUse, code);
-      sqlResult = outcome;
+      const endTime = performance.now();
+      sqlResult = { ...outcome, executionTime: endTime - startTime };
 
       // Evaluate the custom SQL checks array
       let allChecksPassed = true;
@@ -437,7 +442,35 @@
     isRunning = false;
     activeTabRight = 'console';
   }
+
+  // Insert code snippet at the end of the user's workspace
+  function insertSnippet(snippet) {
+    if (code.endsWith('\n') || code === '') {
+      code = code + snippet;
+    } else {
+      code = code + '\n' + snippet;
+    }
+  }
+
+  // Global keyboard shortcut listener
+  function handleKeyDown(event) {
+    // Ctrl+Enter or Cmd+Enter to execute code
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      if (!isRunning) {
+        runCode();
+      }
+    }
+    // Ctrl+Alt+R to reset workspace code
+    if (event.ctrlKey && event.altKey && event.key === 'r') {
+      event.preventDefault();
+      resetCode();
+    }
+  }
 </script>
+
+<!-- Listen to global window keyboard shortcuts -->
+<svelte:window onkeydown={handleKeyDown} />
 
 <!-- Confetti Canvas Particle Overlay -->
 {#if showConfetti}
@@ -562,6 +595,73 @@
                   {/if}
                 </div>
               {/if}
+
+              <!-- Cheat Sheet / Snippets Section -->
+              <div class="expansion-block cheat-sheet-block">
+                <button 
+                  class="expansion-header" 
+                  onclick={() => showCheatSheet = !showCheatSheet}
+                >
+                  <BookOpen size={14} class="header-icon" />
+                  <span>{activeLang === 'python' ? 'Python Snippets' : 'SQL Cheat Sheet'}</span>
+                  <span class="caret" class:open={showCheatSheet}>▼</span>
+                </button>
+                {#if showCheatSheet}
+                  <div class="expansion-content snippets-grid">
+                    {#if activeLang === 'python'}
+                      <button class="snippet-item" onclick={() => insertSnippet('import numpy as np\n')}>
+                        <code>import numpy as np</code>
+                        <span>Import NumPy</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('import pandas as pd\n')}>
+                        <code>import pandas as pd</code>
+                        <span>Import Pandas</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('for i in range(10):\n    print(i)\n')}>
+                        <code>for i in range(10)</code>
+                        <span>For Loop</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('[x for x in items if x > 0]')}>
+                        <code>[x for x in list]</code>
+                        <span>List Comprehension</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('np.mean(arr)')}>
+                        <code>np.mean(arr)</code>
+                        <span>Mean calculation</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('df.groupby(\'col\').mean()')}>
+                        <code>df.groupby()</code>
+                        <span>Pandas GroupBy</span>
+                      </button>
+                    {:else}
+                      <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table;\n')}>
+                        <code>SELECT * FROM...</code>
+                        <span>Select All</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table\nWHERE condition;\n')}>
+                        <code>WHERE ...</code>
+                        <span>Filter rows</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM t1\nJOIN t2 ON t1.id = t2.t1_id;\n')}>
+                        <code>INNER JOIN ...</code>
+                        <span>Join tables</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('SELECT col, COUNT(*)\nFROM table\nGROUP BY col;\n')}>
+                        <code>GROUP BY ...</code>
+                        <span>Aggregation</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('SELECT col, ROW_NUMBER() OVER (PARTITION BY col2 ORDER BY col3) as rnk\nFROM table;\n')}>
+                        <code>ROW_NUMBER() OVER...</code>
+                        <span>Window Function</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('WITH cte AS (\n  SELECT * FROM table\n)\nSELECT * FROM cte;\n')}>
+                        <code>WITH cte AS (...)</code>
+                        <span>Common Table Exp.</span>
+                      </button>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
 
               <!-- Sandbox Control Panels -->
               {#if isSandboxMode}
@@ -735,6 +835,7 @@
                   dbState={sqlResult.dbState}
                   hasRun={hasRun}
                   isRunning={isRunning}
+                  executionTime={activeLang === 'python' ? pyResult.executionTime : sqlResult.executionTime}
                 />
               {:else}
                 <SchemaBrowser schema={sqlResult.schema || {}} dbState={sqlResult.dbState || {}} />
@@ -1670,6 +1771,56 @@
     to {
       transform: translateX(0);
       opacity: 1;
+    }
+  }
+
+  /* Cheat Sheet / Snippets Styles */
+  .snippets-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .snippet-item {
+    background: var(--color-canvas);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+  }
+
+  .snippet-item:hover {
+    border-color: var(--color-primary);
+    background: var(--color-accent-glow);
+    transform: translateY(-1px);
+  }
+
+  .snippet-item code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-primary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    width: 100%;
+    text-align: left;
+  }
+
+  .snippet-item span {
+    font-size: 10px;
+    color: var(--color-muted);
+    font-weight: 500;
+  }
+
+  @media (max-width: 320px) {
+    .snippets-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>
