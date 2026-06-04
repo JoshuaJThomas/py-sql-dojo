@@ -63,7 +63,7 @@
     border-bottom: 1px solid #1a1a24;
   }
 
-  .db-icon {
+  :global(.db-icon) {
     color: #10b981;
   }
 
@@ -111,7 +111,7 @@
     border-bottom: 1px solid #1c1c27;
   }
 
-  .table-icon {
+  :global(.table-icon) {
     color: #3b82f6;
   }
 
@@ -142,7 +142,7 @@
     gap: 6px;
   }
 
-  .pk-key {
+  :global(.pk-key) {
     color: #eab308;
   }
 

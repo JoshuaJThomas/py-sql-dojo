@@ -303,7 +303,7 @@
     padding: 40px 0;
   }
 
-  .idle-icon {
+  :global(.idle-icon) {
     color: #334155;
   }
 
@@ -406,11 +406,11 @@
     color: #a7f3d0;
   }
 
-  .check-icon.pass {
+  :global(.check-icon.pass) {
     color: #10b981;
   }
 
-  .check-icon.fail {
+  :global(.check-icon.fail) {
     color: #ef4444;
   }
 

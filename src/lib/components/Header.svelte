@@ -179,7 +179,7 @@
     background: rgba(249, 115, 22, 0.05);
   }
 
-  .streak-icon {
+  :global(.streak-icon) {
     color: #f97316;
     filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.4));
   }
@@ -205,7 +205,7 @@
     margin-bottom: 4px;
   }
 
-  .trophy-icon {
+  :global(.trophy-icon) {
     color: #eab308;
   }
 
