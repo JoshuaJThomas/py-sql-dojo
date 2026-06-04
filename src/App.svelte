@@ -112,6 +112,16 @@
     if (lang === 'python' && activeTabRight === 'schema') {
       activeTabRight = 'console';
     }
+
+    // Auto-initialize SQL schema so the browser/schema isn't empty on load
+    if (lang === 'sql') {
+      runSqlQuery(sqlDbSeed, "").then(outcome => {
+        if (outcome.success) {
+          sqlResult.schema = outcome.schema;
+          sqlResult.dbState = outcome.dbState;
+        }
+      });
+    }
   });
 
   // Triggered when clicking "Train" from Dashboard
@@ -369,7 +379,7 @@
                 hasRun={hasRun}
               />
             {:else}
-              <SchemaBrowser schema={sqlResult.schema || {}} />
+              <SchemaBrowser schema={sqlResult.schema || {}} dbState={sqlResult.dbState || {}} />
             {/if}
           </div>
         </section>
