@@ -89,7 +89,7 @@ completionDates.subscribe(val => setStorage('completion_dates', val));
 theme.subscribe(val => {
   setStorage('theme', val);
   if (typeof document !== 'undefined') {
-    document.body.classList.remove('theme-obsidian', 'theme-cyberpunk', 'theme-matrix', 'theme-classic');
+    document.body.classList.remove('theme-obsidian', 'theme-cyberpunk', 'theme-matrix', 'theme-classic', 'theme-light');
     document.body.classList.add(`theme-${val}`);
   }
 });
@@ -123,15 +123,20 @@ function initializeStarterCode() {
 initializeStarterCode();
 
 // Vanguard Anti-Cheat Verification on startup
-function checkVanguardIntegrity() {
+export function checkVanguardIntegrity() {
   if (typeof window === 'undefined') return;
   const loadedXp = get(xp);
   const loadedCompleted = get(completedChallenges);
   const loadedSig = localStorage.getItem('dojo_signature');
   
   if (loadedXp > 0 || loadedCompleted.length > 0) {
+    if (!loadedSig) {
+      // Legacy user upgrading - sign their progress silently to avoid false warnings
+      updateSignature();
+      return;
+    }
     const expectedSig = generateSignature(loadedXp, loadedCompleted);
-    if (!loadedSig || loadedSig !== expectedSig) {
+    if (loadedSig !== expectedSig) {
       alert("🛡️ Vanguard Anti-Cheat: Local storage modification detected! Your progress has been reverted to prevent cheating.");
       // Rollback
       xp.set(0);
@@ -182,10 +187,6 @@ export function checkDailyStreakOnLoad() {
     }
   }
 }
-
-// Trigger checks on load
-checkVanguardIntegrity();
-checkDailyStreakOnLoad();
 
 // Helper to evaluate and unlock achievement badges
 export function checkAchievements() {

@@ -547,6 +547,13 @@
                 >
                   Classic
                 </button>
+                <button 
+                  class="theme-select-btn theme-light" 
+                  class:active={$theme === 'light'}
+                  onclick={() => theme.set('light')}
+                >
+                  Light Mode
+                </button>
               </div>
             </div>
 
@@ -1476,6 +1483,8 @@
   .theme-select-btn.theme-cyberpunk { background: #0d0614; }
   .theme-select-btn.theme-matrix { background: #020804; }
   .theme-select-btn.theme-classic { background: #0b0f19; }
+  .theme-select-btn.theme-light { background: #f8fafc; color: #334155; border-color: #cbd5e1; }
+  .theme-select-btn.theme-light.active { border-color: #10b981; color: #10b981; }
 
   .theme-select-btn.active {
     border-color: var(--color-primary);
