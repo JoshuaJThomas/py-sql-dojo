@@ -12,6 +12,8 @@
   import { sqlExercises } from '../data/sql-exercises.js';
   import { Trophy, Flame, CheckCircle, Circle, Play, BookOpen, Star } from 'lucide-svelte';
 
+  let { onOpenSandbox } = $props();
+
   let currentLang = $derived($language);
   let completedList = $derived($completedChallenges);
   let currentXp = $derived($xp);
@@ -166,9 +168,15 @@
 
   <!-- Chapters list -->
   <div class="dojo-chapters-list">
-    <div class="section-title">
-      <BookOpen size={18} class="sec-icon" />
-      <h2>Dojo Syllabus ({currentLang === 'python' ? 'Python' : 'SQL'})</h2>
+    <div class="dojo-syllabus-header">
+      <div class="section-title">
+        <BookOpen size={18} class="sec-icon" />
+        <h2>Dojo Syllabus ({currentLang === 'python' ? 'Python' : 'SQL'})</h2>
+      </div>
+      <button class="sandbox-cta-btn" onclick={onOpenSandbox}>
+        <Play size={12} class="sandbox-cta-icon" fill="currentColor" />
+        <span>Launch Free Sandbox</span>
+      </button>
     </div>
 
     {#if currentLang === 'python'}
@@ -361,20 +369,62 @@
     transition: all 0.2s;
   }
 
-  .heatmap-cell.active-low { background: #064e3b; }
-  .heatmap-cell.active-med { background: #047857; }
-  .heatmap-cell.active-high { background: #10b981; box-shadow: 0 0 4px #10b981; }
+  .heatmap-cell:hover {
+    transform: scale(1.25);
+    box-shadow: 0 0 6px var(--color-glow, #10b981);
+    z-index: 5;
+    cursor: pointer;
+  }
+
+  .heatmap-cell.active-low { background: #064e3b; --color-glow: #064e3b; }
+  .heatmap-cell.active-med { background: #047857; --color-glow: #047857; }
+  .heatmap-cell.active-high { background: #10b981; box-shadow: 0 0 4px #10b981; --color-glow: #10b981; }
 
   /* Syllabus Section */
+  .dojo-syllabus-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #1a1a24;
+    padding-bottom: 16px;
+  }
+
   .section-title {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 24px;
   }
 
   .sec-icon {
     color: #10b981;
+  }
+
+  .sandbox-cta-btn {
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #c084fc;
+    padding: 8px 16px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+
+  .sandbox-cta-btn:hover {
+    background: #8b5cf6;
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.4);
+    border-color: #8b5cf6;
+  }
+
+  :global(.sandbox-cta-icon) {
+    filter: drop-shadow(0 0 2px rgba(139, 92, 246, 0.4));
   }
 
   .section-title h2 {
