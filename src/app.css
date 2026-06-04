@@ -8,6 +8,24 @@
   --color-muted: #64748b;
   --color-hairline: #1a1a24;
   --color-card-border: #1c1c27;
+
+  /* Success states */
+  --color-success: #10b981;
+  --color-success-bg: rgba(16, 185, 129, 0.05);
+  --color-success-border: rgba(16, 185, 129, 0.15);
+  --color-success-text: #a7f3d0;
+
+  /* Error states */
+  --color-error: #ef4444;
+  --color-error-bg: rgba(239, 68, 68, 0.05);
+  --color-error-border: rgba(239, 68, 68, 0.15);
+  --color-error-text: #fca5a5;
+  
+  /* Warning states */
+  --color-warning: #eab308;
+  --color-warning-bg: rgba(234, 179, 8, 0.05);
+  --color-warning-border: rgba(234, 179, 8, 0.15);
+  --color-warning-text: #fde047;
   
   /* Font Stacks */
   --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
@@ -82,6 +100,12 @@ body.theme-obsidian {
   --color-primary: #10b981;
   --color-card-border: #1c1c27;
   --color-hairline: #1a1a24;
+  --color-header-bg: #0d0d11;
+  --color-card-bg: #0d0d11;
+  --color-editor-bg: #09090c;
+  --color-panel-left-bg: #0d0d11;
+  --color-tab-inactive: #111116;
+  --color-accent-glow: rgba(16, 185, 129, 0.2);
 }
 
 body.theme-cyberpunk {
@@ -90,6 +114,12 @@ body.theme-cyberpunk {
   --color-card-border: #2e1065;
   --color-hairline: #3b0764;
   --color-ink: #fdf4ff;
+  --color-header-bg: #12071c;
+  --color-card-bg: #12071c;
+  --color-editor-bg: #0d0614;
+  --color-panel-left-bg: #12071c;
+  --color-tab-inactive: #1a0a2a;
+  --color-accent-glow: rgba(217, 70, 239, 0.25);
 }
 
 body.theme-matrix {
@@ -98,6 +128,12 @@ body.theme-matrix {
   --color-card-border: #14532d;
   --color-hairline: #052e16;
   --color-ink: #f0fdf4;
+  --color-header-bg: #030c05;
+  --color-card-bg: #030c05;
+  --color-editor-bg: #020804;
+  --color-panel-left-bg: #030c05;
+  --color-tab-inactive: #041408;
+  --color-accent-glow: rgba(34, 197, 94, 0.25);
 }
 
 body.theme-classic {
@@ -106,4 +142,54 @@ body.theme-classic {
   --color-card-border: #1e293b;
   --color-hairline: #1e293b;
   --color-ink: #f8fafc;
+  --color-header-bg: #0f172a;
+  --color-card-bg: #0f172a;
+  --color-editor-bg: #0b0f19;
+  --color-panel-left-bg: #0f172a;
+  --color-tab-inactive: #1e293b;
+  --color-accent-glow: rgba(59, 130, 246, 0.25);
+}
+
+body.theme-light {
+  --color-canvas: #f8fafc;          /* slate-50 */
+  --color-primary: #0f766e;         /* teal-700 for high-contrast accessibility */
+  --color-ink: #0f172a;            /* slate-900 */
+  --color-muted: #475569;          /* slate-600 */
+  --color-hairline: #e2e8f0;       /* slate-200 */
+  --color-card-border: #cbd5e1;    /* slate-300 */
+  --color-header-bg: #ffffff;      /* pure white */
+  --color-card-bg: #ffffff;        /* pure white */
+  --color-editor-bg: #f1f5f9;      /* slate-100 */
+  --color-panel-left-bg: #ffffff;  /* pure white */
+  --color-tab-inactive: #f1f5f9;   /* slate-100 */
+  --color-accent-glow: rgba(15, 118, 110, 0.15);
+
+  /* Success states - Light Theme */
+  --color-success: #059669;
+  --color-success-bg: rgba(5, 150, 105, 0.06);
+  --color-success-border: rgba(5, 150, 105, 0.15);
+  --color-success-text: #065f46;
+
+  /* Error states - Light Theme */
+  --color-error: #dc2626;
+  --color-error-bg: rgba(220, 38, 38, 0.06);
+  --color-error-border: rgba(220, 38, 38, 0.15);
+  --color-error-text: #991b1b;
+  
+  /* Warning states - Light Theme */
+  --color-warning: #d97706;
+  --color-warning-bg: rgba(217, 119, 6, 0.06);
+  --color-warning-border: rgba(217, 119, 6, 0.15);
+  --color-warning-text: #78350f;
+}
+
+/* Light Theme Scrollbars */
+body.theme-light ::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+body.theme-light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+body.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

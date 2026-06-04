@@ -50,9 +50,9 @@
 
 <style>
   .schema-browser {
-    border: 1px solid #1a1a24;
+    border: 1px solid var(--color-hairline);
     border-radius: var(--radius-sm);
-    background: #0d0d11;
+    background: var(--color-card-bg);
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -64,19 +64,19 @@
     align-items: center;
     gap: 8px;
     padding: 12px 16px;
-    background: #111116;
-    border-bottom: 1px solid #1a1a24;
+    background: var(--color-tab-inactive);
+    border-bottom: 1px solid var(--color-hairline);
   }
 
   :global(.db-icon) {
-    color: #10b981;
+    color: var(--color-primary);
   }
 
   .title {
     font-family: var(--font-body);
     font-size: 13px;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--color-ink);
     letter-spacing: 0.05em;
     text-transform: uppercase;
   }
@@ -88,7 +88,7 @@
   }
 
   .empty-text {
-    color: #64748b;
+    color: var(--color-muted);
     font-size: 13px;
     text-align: center;
     padding: 20px 0;
@@ -101,8 +101,8 @@
   }
 
   .table-card {
-    background: #101015;
-    border: 1px solid #1c1c27;
+    background: var(--color-editor-bg);
+    border: 1px solid var(--color-card-border);
     border-radius: var(--radius-sm);
     overflow: hidden;
   }
@@ -112,8 +112,8 @@
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    background: #14141d;
-    border-bottom: 1px solid #1c1c27;
+    background: var(--color-tab-inactive);
+    border-bottom: 1px solid var(--color-hairline);
   }
 
   :global(.table-icon) {
@@ -124,13 +124,13 @@
     font-family: var(--font-mono);
     font-size: 13px;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--color-ink);
   }
 
   .row-count-badge {
     font-size: 10px;
     font-family: var(--font-mono);
-    color: #64748b;
+    color: var(--color-muted);
     background: rgba(100, 116, 139, 0.1);
     padding: 2px 6px;
     border-radius: 4px;
@@ -164,7 +164,7 @@
 
   .col-name {
     font-family: var(--font-mono);
-    color: #cbd5e1;
+    color: var(--color-ink);
   }
 
   .col-name.pk-name {

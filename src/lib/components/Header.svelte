@@ -101,8 +101,8 @@
 
 <style>
   .dojo-header {
-    background: #0d0d11;
-    border-bottom: 1px solid #1a1a24;
+    background: var(--color-header-bg);
+    border-bottom: 1px solid var(--color-hairline);
     position: sticky;
     top: 0;
     z-index: 100;
@@ -128,22 +128,22 @@
     font-size: 20px;
     font-weight: 700;
     letter-spacing: 0.1em;
-    color: #ffffff;
-    text-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+    color: var(--color-ink);
+    text-shadow: 0 0 10px var(--color-accent-glow);
   }
 
   .mono-tag {
     font-family: var(--font-mono);
     font-size: 10px;
-    color: #64748b;
+    color: var(--color-muted);
     letter-spacing: 0.15em;
     margin-top: 2px;
   }
 
   .mode-selector {
     display: flex;
-    background: #111116;
-    border: 1px solid #1d1d29;
+    background: var(--color-tab-inactive);
+    border: 1px solid var(--color-hairline);
     border-radius: var(--radius-pill);
     padding: 4px;
   }
@@ -152,7 +152,7 @@
     background: transparent;
     border: none;
     outline: none;
-    color: #94a3b8;
+    color: var(--color-muted);
     padding: 8px 18px;
     border-radius: var(--radius-pill);
     cursor: pointer;
@@ -169,13 +169,13 @@
   }
 
   .mode-btn:hover {
-    color: #ffffff;
+    color: var(--color-ink);
   }
 
   .mode-btn.active {
-    background: #10b981;
-    color: #000000;
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    background: var(--color-primary);
+    color: var(--color-canvas);
+    box-shadow: 0 4px 12px var(--color-accent-glow);
   }
 
   .stats-panel {
@@ -185,8 +185,8 @@
   }
 
   .stat-badge {
-    background: #111116;
-    border: 1px solid #1d1d29;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-hairline);
     border-radius: var(--radius-md);
     padding: 8px 14px;
     display: flex;
@@ -195,7 +195,7 @@
   }
 
   .streak-badge {
-    border-color: rgba(249, 115, 22, 0.2);
+    border-color: rgba(249, 115, 22, 0.25);
     background: rgba(249, 115, 22, 0.05);
   }
 
@@ -208,7 +208,7 @@
     font-family: var(--font-mono);
     font-size: 16px;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--color-ink);
   }
 
   .xp-container {
@@ -231,18 +231,18 @@
 
   .level-text {
     font-family: var(--font-mono);
-    color: #ffffff;
+    color: var(--color-ink);
     font-weight: 700;
   }
 
   .xp-text {
     font-family: var(--font-mono);
-    color: #64748b;
+    color: var(--color-muted);
   }
 
   .xp-bar-bg {
     height: 6px;
-    background: #1a1a24;
+    background: var(--color-tab-inactive);
     border-radius: var(--radius-full);
     overflow: hidden;
   }
@@ -299,9 +299,9 @@
 
   .reset-btn {
     background: transparent;
-    border: 1px solid #1a1a24;
+    border: 1px solid var(--color-hairline);
     border-radius: var(--radius-md);
-    color: #64748b;
+    color: var(--color-muted);
     width: 36px;
     height: 36px;
     cursor: pointer;
