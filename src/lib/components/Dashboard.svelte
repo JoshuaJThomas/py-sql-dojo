@@ -340,7 +340,7 @@
           {#each last28Days as day}
             <div 
               class="heatmap-cell {getHeatmapColor(day)}" 
-              title="{day.toDateString()}"
+              title="{day.toDateString()}: {getHeatmapCount(day)} task(s) completed"
             ></div>
           {/each}
         </div>

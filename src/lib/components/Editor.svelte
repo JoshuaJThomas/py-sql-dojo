@@ -6,7 +6,7 @@
   import { python } from '@codemirror/lang-python';
   import { sql } from '@codemirror/lang-sql';
 
-  let { value = $bindable(), language = 'python', onChange = null } = $props();
+  let { value = $bindable(), language = 'python', onChange = null, fontSize = 14, wordWrap = true } = $props();
 
   let containerEl;
   let view;
@@ -17,7 +17,6 @@
       color: "#d4d4d4",
       backgroundColor: "#101014",
       fontFamily: "var(--font-mono)",
-      fontSize: "14px",
       height: "100%"
     },
     ".cm-content": {
@@ -57,7 +56,7 @@
     return [];
   }
 
-  function createEditorState(initialValue, lang) {
+  function createEditorState(initialValue, lang, size, wrap) {
     return EditorState.create({
       doc: initialValue,
       extensions: [
@@ -66,6 +65,12 @@
         drawSelection(),
         getLanguageExtension(lang),
         dojoTheme,
+        EditorView.theme({
+          "&": {
+            fontSize: `${size}px !important`
+          }
+        }),
+        wrap ? EditorView.lineWrapping : [],
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap
@@ -93,17 +98,17 @@
   });
 
   $effect(() => {
-    // Recreate the state if the language changes
+    // Recreate the state if language, fontSize, or wordWrap changes
     if (view) {
       isUpdating = true;
-      view.setState(createEditorState(value, language));
+      view.setState(createEditorState(value, language, fontSize, wordWrap));
       isUpdating = false;
     }
   });
 
   onMount(() => {
     view = new EditorView({
-      state: createEditorState(value, language),
+      state: createEditorState(value, language, fontSize, wordWrap),
       parent: containerEl
     });
   });

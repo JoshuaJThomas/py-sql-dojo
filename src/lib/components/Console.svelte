@@ -1,5 +1,5 @@
 <script>
-  import { Terminal, AlertCircle, CheckCircle, Database, HelpCircle } from 'lucide-svelte';
+  import { Terminal, AlertCircle, CheckCircle, Database, HelpCircle, Download } from 'lucide-svelte';
 
   let { 
     type = 'python',
@@ -14,6 +14,7 @@
 
   let activeTab = $state('console'); // 'console' | 'table-data'
   let activeTablePreview = $state('');
+  let consoleBodyRef = $state(null);
 
   let tableList = $derived(Object.keys(dbState));
 
@@ -30,6 +31,82 @@
       activeTab = 'console';
     }
   });
+
+  // Auto-scroll console to bottom when results load
+  $effect(() => {
+    const trigger = [stdout, error, queryResult, activeTab];
+    if (consoleBodyRef) {
+      setTimeout(() => {
+        consoleBodyRef.scrollTop = consoleBodyRef.scrollHeight;
+      }, 50);
+    }
+  });
+
+  // Export SQL rows to CSV
+  function downloadCSV() {
+    if (!queryResult || queryResult.length === 0) return;
+    const columns = queryResult[0].columns;
+    const values = queryResult[0].values;
+    
+    const csvContent = [
+      columns.join(','),
+      ...values.map(row => 
+        row.map(val => {
+          if (val === null) return 'NULL';
+          const str = String(val);
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`;
+          }
+          return str;
+        }).join(',')
+      )
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dojo_query_result_${new Date().getTime()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // Export console text output to a txt file
+  function downloadConsoleLogs() {
+    let logText = "";
+    if (type === 'python') {
+      if (error) {
+        logText = `Python Execution Error:\n${error}`;
+      } else if (stdout) {
+        logText = `Python Standard Output:\n${stdout}`;
+      } else {
+        logText = "Python executed successfully (no stdout output).";
+      }
+    } else if (type === 'sql') {
+      if (error) {
+        logText = `SQL Query Execution Error:\n${error}`;
+      } else if (queryResult && queryResult.length > 0) {
+        const columns = queryResult[0].columns;
+        const values = queryResult[0].values;
+        logText = `SQL Query Executed Successfully.\nColumns: ${columns.join(', ')}\nRows:\n` +
+          values.map(v => v.map(cell => cell === null ? 'NULL' : cell).join(' | ')).join('\n');
+      } else {
+        logText = `SQL Query Executed Successfully (No Rows returned).`;
+      }
+    }
+    
+    const blob = new Blob([logText], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${type}_console_output_${new Date().getTime()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 </script>
 
 <div class="console-box">
@@ -55,9 +132,24 @@
         </button>
       {/if}
     </div>
+
+    <div class="console-header-actions">
+      {#if hasRun && (stdout || error || (type === 'sql' && queryResult))}
+        <button class="console-action-btn" onclick={downloadConsoleLogs} title="Download console logs">
+          <Download size={11} />
+          <span>Logs</span>
+        </button>
+      {/if}
+      {#if type === 'sql' && queryResult && queryResult.length > 0}
+        <button class="console-action-btn csv-btn" onclick={downloadCSV} title="Export query result as CSV">
+          <Download size={11} />
+          <span>Export CSV</span>
+        </button>
+      {/if}
+    </div>
   </div>
 
-  <div class="console-body">
+  <div class="console-body" bind:this={consoleBodyRef}>
     {#if activeTab === 'console'}
       {#if !hasRun}
         <div class="idle-state">
@@ -595,5 +687,37 @@
     color: #64748b;
     font-size: 13px;
     padding: 20px;
+  }
+
+  .console-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .console-action-btn {
+    background: #1c1c28;
+    border: 1px solid #27273a;
+    color: #cbd5e1;
+    padding: 4px 8px;
+    border-radius: var(--radius-xs);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+  }
+
+  .console-action-btn:hover {
+    background: #232334;
+    border-color: #3b82f6;
+    color: #ffffff;
+  }
+
+  .console-action-btn.csv-btn:hover {
+    border-color: #10b981;
   }
 </style>
