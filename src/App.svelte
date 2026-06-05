@@ -101,6 +101,14 @@
   // Bind code inputs to stores
   let code = $state('');
 
+  // Quiz state variables
+  let selectedOption = $state(null);
+  let quizAnswered = $state(false);
+  let quizCorrect = $state(false);
+  let completedQuizzes = $state([]);
+  let systemToast = $state(null);
+  let systemToastTimeout;
+
   // Watch for challenge/language updates and update code state
   $effect(() => {
     if (isSandboxMode) {
@@ -163,6 +171,11 @@
     showHint = false;
     showSolution = false;
     activeTabLeft = 'task';
+    
+    // Reset quiz state when challenge changes
+    selectedOption = null;
+    quizAnswered = false;
+    quizCorrect = false;
     
     pyResult = { success: false, stdout: '', error: '', checksPassed: false, checksResults: [] };
     sqlResult = { success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [] };
@@ -234,6 +247,16 @@
     // Run security and streak validation checks safely inside browser mount
     checkVanguardIntegrity();
     checkDailyStreakOnLoad();
+
+    // Load completed concept quizzes
+    try {
+      const saved = localStorage.getItem('dojo_completed_quizzes');
+      if (saved) {
+        completedQuizzes = JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Error loading completed quizzes: ", e);
+    }
 
     loadPyodideInstance().catch(err => console.error("Error pre-loading Pyodide: ", err));
   });
@@ -490,12 +513,63 @@
     activeTabRight = 'console';
   }
 
-  // Insert code snippet at the end of the user's workspace
-  function insertSnippet(snippet) {
-    if (code.endsWith('\n') || code === '') {
-      code = code + snippet;
+  // System notification toast helper
+  function showSystemToast(message, type = 'info') {
+    if (systemToastTimeout) clearTimeout(systemToastTimeout);
+    systemToast = { message, type };
+    systemToastTimeout = setTimeout(() => {
+      systemToast = null;
+    }, 4000);
+  }
+
+  // Submit quiz answer and update XP
+  function submitQuizAnswer(optionIdx, correctIdx, topicName) {
+    if (quizAnswered) return;
+    selectedOption = optionIdx;
+    quizAnswered = true;
+    
+    if (optionIdx === correctIdx) {
+      quizCorrect = true;
+      playSuccessChime();
+      
+      if (!completedQuizzes.includes(topicName)) {
+        completedQuizzes = [...completedQuizzes, topicName];
+        localStorage.setItem('dojo_completed_quizzes', JSON.stringify(completedQuizzes));
+        xp.update(val => val + 10);
+        showSystemToast("🎯 Correct! +10 XP earned!", "success");
+      } else {
+        showSystemToast("🎯 Correct!", "success");
+      }
     } else {
-      code = code + '\n' + snippet;
+      quizCorrect = false;
+      playErrorBuzz();
+      showSystemToast("❌ Incorrect. Review key takeaways!", "error");
+    }
+  }
+
+  // Insert code snippet at the end of the user's workspace, copying to clipboard & giving notifications
+  function insertSnippet(snippet) {
+    if (workspaceMode === 'notebook') {
+      navigator.clipboard.writeText(snippet).then(() => {
+        showSystemToast("📋 Snippet copied! Paste it in your notebook cell.", "info");
+      }).catch(err => {
+        showSystemToast("📋 Copy failed, please manually highlight.", "error");
+      });
+    } else {
+      let newCode = code;
+      if (newCode.endsWith('\n') || newCode === '') {
+        newCode = newCode + snippet;
+      } else {
+        newCode = newCode + '\n' + snippet;
+      }
+      code = newCode;
+      handleCodeChange(newCode); // Update the stores!
+      
+      navigator.clipboard.writeText(snippet).then(() => {
+        showSystemToast("📋 Snippet copied and inserted into editor!", "success");
+      }).catch(err => {
+        showSystemToast("📋 Snippet inserted into editor!", "success");
+      });
     }
   }
 
@@ -710,6 +784,46 @@
                         <button class="concept-use-btn" onclick={() => insertSnippet(breakdown.example + '\n')} title="Insert this code example into editor">
                           Insert into Editor
                         </button>
+                      </div>
+                    {/if}
+
+                    <!-- Interactive Concept Check Quiz -->
+                    {#if breakdown.quiz}
+                      <div class="concept-quiz-card" class:completed={completedQuizzes.includes(currentChallenge.topic)}>
+                        <div class="quiz-header">
+                          <span class="quiz-title-tag">💡 CONCEPT CHECK</span>
+                          {#if completedQuizzes.includes(currentChallenge.topic)}
+                            <span class="quiz-badge success">✓ COMPLETED (+10 XP)</span>
+                          {:else}
+                            <span class="quiz-badge reward">+10 XP REWARD</span>
+                          {/if}
+                        </div>
+                        <p class="quiz-question">{breakdown.quiz.question}</p>
+                        
+                        <div class="quiz-options">
+                          {#each breakdown.quiz.options as opt, idx}
+                            <button 
+                              class="quiz-option-btn"
+                              class:selected={selectedOption === idx}
+                              class:correct={quizAnswered && idx === breakdown.quiz.answer}
+                              class:wrong={quizAnswered && selectedOption === idx && idx !== breakdown.quiz.answer}
+                              disabled={quizAnswered}
+                              onclick={() => submitQuizAnswer(idx, breakdown.quiz.answer, currentChallenge.topic)}
+                            >
+                              <span class="option-letter">{['A', 'B', 'C', 'D'][idx]}</span>
+                              <span class="option-text">{opt}</span>
+                            </button>
+                          {/each}
+                        </div>
+
+                        {#if quizAnswered}
+                          <div class="quiz-explanation-box" class:correct={quizCorrect}>
+                            <p class="explanation-status">
+                              {quizCorrect ? '🎉 Correct!' : '❌ Incorrect'}
+                            </p>
+                            <p class="explanation-text">{breakdown.quiz.explanation}</p>
+                          </div>
+                        {/if}
                       </div>
                     {/if}
                   </div>
@@ -1041,6 +1155,19 @@
         <p class="badge-toast-desc">{activeBadgeUnlock.desc}</p>
       </div>
     </div>
+  </div>
+{/if}
+
+<!-- System Toast Message (Item 86) -->
+{#if systemToast}
+  <div class="system-toast {systemToast.type}">
+    <span class="toast-icon">
+      {#if systemToast.type === 'success'}🎯
+      {:else if systemToast.type === 'error'}❌
+      {:else}ℹ️
+      {/if}
+    </span>
+    <span class="toast-message">{systemToast.message}</span>
   </div>
 {/if}
 
@@ -1699,7 +1826,7 @@
   .editor-controls {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 16px;
   }
 
   .font-controls {
@@ -1748,17 +1875,17 @@
     background: var(--color-canvas);
     border: 1px solid var(--color-hairline);
     color: var(--color-muted);
-    padding: 3px 10px;
+    padding: 5px 12px;
     width: auto;
     height: auto;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 6px;
     border-radius: var(--radius-xs);
   }
 
@@ -2291,5 +2418,236 @@
   .drawer-body-wrap {
     flex: 1;
     overflow: hidden;
+  }
+
+  /* Concept Check Quiz CSS */
+  .concept-quiz-card {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    margin-top: 14px;
+    margin-bottom: 20px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .concept-quiz-card.completed {
+    border-color: rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
+  }
+
+  .quiz-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--color-hairline);
+    padding-bottom: 6px;
+  }
+
+  .quiz-title-tag {
+    font-family: var(--font-body);
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--color-muted);
+    letter-spacing: 0.08em;
+  }
+
+  .quiz-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  .quiz-badge.reward {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .quiz-badge.success {
+    background: rgba(16, 185, 129, 0.15);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .quiz-question {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--color-ink);
+    margin: 0 0 14px 0;
+  }
+
+  .quiz-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .quiz-option-btn {
+    display: flex;
+    align-items: center;
+    text-align: left;
+    background: var(--color-canvas);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 10px 12px;
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: 11.5px;
+    color: var(--color-ink);
+    transition: all 0.2s;
+  }
+
+  .quiz-option-btn:hover:not(:disabled) {
+    background: var(--color-tab-inactive);
+    border-color: var(--color-primary);
+  }
+
+  .quiz-option-btn.selected {
+    border-color: var(--color-primary);
+    background: var(--color-accent-glow);
+  }
+
+  .quiz-option-btn.correct {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: #10b981;
+    color: #10b981;
+  }
+
+  .quiz-option-btn.wrong {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: #ef4444;
+    color: #ef4444;
+  }
+
+  .quiz-option-btn:disabled {
+    cursor: not-allowed;
+  }
+
+  .option-letter {
+    font-family: var(--font-mono);
+    font-weight: 800;
+    font-size: 10px;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-hairline);
+    color: var(--color-muted);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    flex-shrink: 0;
+  }
+
+  .quiz-option-btn.correct .option-letter {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+  }
+
+  .quiz-option-btn.wrong .option-letter {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+  }
+
+  .quiz-explanation-box {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-hairline);
+    background: var(--color-canvas);
+  }
+
+  .quiz-explanation-box.correct {
+    border-left: 3px solid #10b981;
+  }
+
+  .quiz-explanation-box:not(.correct) {
+    border-left: 3px solid #ef4444;
+  }
+
+  .explanation-status {
+    font-size: 11px;
+    font-weight: 800;
+    margin: 0 0 4px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .quiz-explanation-box.correct .explanation-status {
+    color: #10b981;
+  }
+
+  .quiz-explanation-box:not(.correct) .explanation-status {
+    color: #ef4444;
+  }
+
+  .explanation-text {
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--color-muted);
+    margin: 0;
+  }
+
+  /* System Toast Notification Styles */
+  .system-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    background: rgba(16, 16, 20, 0.95);
+    border: 1px solid var(--color-hairline);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight: 600;
+    animation: toast-slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .system-toast.success {
+    border-left: 4px solid #10b981;
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
+  }
+
+  .system-toast.error {
+    border-left: 4px solid #ef4444;
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.15);
+  }
+
+  .system-toast.info {
+    border-left: 4px solid var(--color-primary);
+    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.15);
+  }
+
+  .toast-icon {
+    font-size: 14px;
+  }
+
+  .toast-message {
+    color: #ffffff;
+  }
+
+  @keyframes toast-slide-in {
+    from {
+      transform: translateY(100px) scale(0.9);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
   }
 </style>

@@ -128,12 +128,24 @@ ambientTrack.subscribe(val => setStorage('ambient_track', val));
 inventory.subscribe(val => setStorage('inventory', val));
 unlockedBadges.subscribe(val => setStorage('unlocked_badges', val));
 
-// Initialize starter code for all challenges if not set
+// Initialize starter code for all challenges and perform self-healing for polluted entries
 function initializeStarterCode() {
   const currentPyCodes = get(userPythonCode);
   let pyUpdated = false;
+
+  const PY_BOILERPLATE = '# Write your python notebook cell here\nimport numpy as np\narr = np.array([1, 2, 3, 4])\nprint("Array multiplied by 3:")\narr * 3';
+  const PY_BOILERPLATE_CLEANED = PY_BOILERPLATE.replace(/\s/g, '');
+
   pythonExercises.forEach(ex => {
-    if (!currentPyCodes[ex.id]) {
+    const savedCode = currentPyCodes[ex.id];
+    // Check if the saved code matches the boilerplate code
+    const isBoilerplate = savedCode && (
+      savedCode === PY_BOILERPLATE || 
+      savedCode.replace(/\s/g, '') === PY_BOILERPLATE_CLEANED ||
+      (savedCode.includes('arr = np.array([1, 2, 3, 4])') && ex.id !== 'ch02-numpy-basic')
+    );
+
+    if (!savedCode || (isBoilerplate && ex.starterCode !== savedCode)) {
       currentPyCodes[ex.id] = ex.starterCode;
       pyUpdated = true;
     }
@@ -142,8 +154,19 @@ function initializeStarterCode() {
 
   const currentSqlCodes = get(userSqlCode);
   let sqlUpdated = false;
+
+  const SQL_BOILERPLATE = '-- Write your SQL query here\nSELECT * FROM employees LIMIT 3;\n';
+  const SQL_BOILERPLATE_CLEANED = SQL_BOILERPLATE.replace(/\s/g, '');
+
   sqlExercises.forEach(ex => {
-    if (!currentSqlCodes[ex.id]) {
+    const savedCode = currentSqlCodes[ex.id];
+    const isBoilerplate = savedCode && (
+      savedCode === SQL_BOILERPLATE || 
+      savedCode.replace(/\s/g, '') === SQL_BOILERPLATE_CLEANED ||
+      (savedCode.includes('SELECT * FROM employees LIMIT 3;') && ex.id !== 'sql-basic-select')
+    );
+
+    if (!savedCode || (isBoilerplate && ex.starterCode !== savedCode)) {
       currentSqlCodes[ex.id] = ex.starterCode;
       sqlUpdated = true;
     }
