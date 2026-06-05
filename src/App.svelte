@@ -26,6 +26,7 @@
   import { playSuccessChime, playLevelUpFanfare, playErrorBuzz } from './lib/utils/soundscapes.js';
   import { parseMarkdown } from './lib/utils/markdown.js';
   import { convertCsvToSql } from './lib/utils/csv-parser.js';
+  import { getConceptBreakdown } from './lib/data/concept-breakdowns.js';
 
   // Import exercise data
   import { pythonExercises } from './lib/data/python-exercises.js';
@@ -53,7 +54,9 @@
     Star,
     Shield,
     Flame,
-    BookOpen
+    BookOpen,
+    GraduationCap,
+    FileText
   } from 'lucide-svelte';
 
   // State
@@ -117,6 +120,7 @@
   let showCheatSheet = $state(false);
 
   // UI state
+  let activeTabLeft = $state('task'); // 'task' | 'concept' | 'cheats'
   let showHint = $state(false);
   let showSolution = $state(false);
   let activeTabRight = $state('console'); // 'console' | 'schema'
@@ -158,6 +162,7 @@
     hasRun = false;
     showHint = false;
     showSolution = false;
+    activeTabLeft = 'task';
     
     pyResult = { success: false, stdout: '', error: '', checksPassed: false, checksResults: [] };
     sqlResult = { success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [] };
@@ -586,124 +591,190 @@
           </section>
         {:else}
           <section class="workspace-panel panel-left">
-            <div class="panel-header-row">
-              <h2 class="subhead" style="margin: 0;">Instructions</h2>
-              {#if isSandboxMode}
-                <span class="sandbox-glow-badge">SANDBOX ACTIVE</span>
-              {/if}
+            <div class="panel-header-row left-tabs-header">
+              <div class="left-panel-tabs">
+                <button 
+                  class="left-tab-btn" 
+                  class:active={activeTabLeft === 'task'} 
+                  onclick={() => activeTabLeft = 'task'}
+                  title="View task description"
+                >
+                  <FileText size={11} />
+                  <span>Task</span>
+                </button>
+                <button 
+                  class="left-tab-btn" 
+                  class:active={activeTabLeft === 'concept'} 
+                  onclick={() => activeTabLeft = 'concept'}
+                  title="View concept explanation"
+                >
+                  <GraduationCap size={11} />
+                  <span>Concept</span>
+                </button>
+                <button 
+                  class="left-tab-btn" 
+                  class:active={activeTabLeft === 'cheats'} 
+                  onclick={() => activeTabLeft = 'cheats'}
+                  title="View interactive cheat sheet"
+                >
+                  <BookOpen size={11} />
+                  <span>Cheats</span>
+                </button>
+              </div>
               <button class="panel-toggle-btn" onclick={() => isLeftPanelCollapsed = true} title="Collapse Instructions">
                 <ChevronLeft size={14} />
               </button>
             </div>
-            <div class="panel-section padding-box">
-              <div class="prompt-text">
-                <p>{@html parseMarkdown(currentChallenge.prompt)}</p>
-              </div>
-
-              <!-- Hint Section -->
-              {#if currentChallenge.hint}
-                <div class="expansion-block">
-                  <button 
-                    class="expansion-header" 
-                    onclick={() => showHint = !showHint}
-                  >
-                    <HelpCircle size={14} class="header-icon" />
-                    <span>Need a Hint?</span>
-                    <span class="caret" class:open={showHint}>▼</span>
-                  </button>
-                  {#if showHint}
-                    <div class="expansion-content">
-                      <p>{@html parseMarkdown(currentChallenge.hint)}</p>
-                    </div>
-                  {/if}
+            
+            <div class="panel-section padding-box scrollable-left-content">
+              {#if activeTabLeft === 'task'}
+                {#if isSandboxMode}
+                  <div style="margin-bottom: 12px; display: flex; justify-content: center;">
+                    <span class="sandbox-glow-badge">SANDBOX PLAYGROUND ACTIVE</span>
+                  </div>
+                {/if}
+                
+                <div class="prompt-text">
+                  <p>{@html parseMarkdown(currentChallenge.prompt)}</p>
                 </div>
-              {/if}
 
-              <!-- Solution Section -->
-              {#if currentChallenge.solution}
-                <div class="expansion-block solution-block">
-                  <button 
-                    class="expansion-header" 
-                    onclick={() => showSolution = !showSolution}
-                  >
-                    <Eye size={14} class="header-icon" />
-                    <span>Show Solution</span>
-                    <span class="caret" class:open={showSolution}>▼</span>
-                  </button>
-                  {#if showSolution}
-                    <div class="expansion-content solution-content">
-                      <pre class="solution-code"><code>{currentChallenge.solution}</code></pre>
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-
-              <!-- Cheat Sheet / Snippets Section -->
-              <div class="expansion-block cheat-sheet-block">
-                <button 
-                  class="expansion-header" 
-                  onclick={() => showCheatSheet = !showCheatSheet}
-                >
-                  <BookOpen size={14} class="header-icon" />
-                  <span>{activeLang === 'python' ? 'Python Snippets' : 'SQL Cheat Sheet'}</span>
-                  <span class="caret" class:open={showCheatSheet}>▼</span>
-                </button>
-                {#if showCheatSheet}
-                  <div class="expansion-content snippets-grid">
-                    {#if activeLang === 'python'}
-                      <button class="snippet-item" onclick={() => insertSnippet('import numpy as np\n')}>
-                        <code>import numpy as np</code>
-                        <span>Import NumPy</span>
-                      </button>
-                      <button class="snippet-item" onclick={() => insertSnippet('import pandas as pd\n')}>
-                        <code>import pandas as pd</code>
-                        <span>Import Pandas</span>
-                      </button>
-                      <button class="snippet-item" onclick={() => insertSnippet('for i in range(10):\n    print(i)\n')}>
-                        <code>for i in range(10)</code>
-                        <span>For Loop</span>
-                      </button>
-                      <button class="snippet-item" onclick={() => insertSnippet('[x for x in items if x > 0]')}>
-                        <code>[x for x in list]</code>
-                        <span>List Comprehension</span>
-                      </button>
-                      <button class="snippet-item" onclick={() => insertSnippet('np.mean(arr)')}>
-                        <code>np.mean(arr)</code>
-                        <span>Mean calculation</span>
-                      </button>
-                      <button class="snippet-item" onclick={() => insertSnippet('df.groupby(\'col\').mean()')}>
-                        <code>df.groupby()</code>
-                        <span>Pandas GroupBy</span>
-                      </button>
-                    {:else}
-                      <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table;\n')}>
-                        <code>SELECT * FROM...</code>
-                        <span>Select All</span>
-                      </button>
-                      <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table\nWHERE condition;\n')}>
-                        <code>WHERE ...</code>
-                        <span>Filter rows</span>
-                      </button>
-                      <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM t1\nJOIN t2 ON t1.id = t2.t1_id;\n')}>
-                        <code>INNER JOIN ...</code>
-                        <span>Join tables</span>
-                      </button>
-                      <button class="snippet-item" onclick={() => insertSnippet('SELECT col, COUNT(*)\nFROM table\nGROUP BY col;\n')}>
-                        <code>GROUP BY ...</code>
-                        <span>Aggregation</span>
-                      </button>
-                      <button class="snippet-item" onclick={() => insertSnippet('SELECT col, ROW_NUMBER() OVER (PARTITION BY col2 ORDER BY col3) as rnk\nFROM table;\n')}>
-                        <code>ROW_NUMBER() OVER...</code>
-                        <span>Window Function</span>
-                      </button>
-                      <button class="snippet-item" onclick={() => insertSnippet('WITH cte AS (\n  SELECT * FROM table\n)\nSELECT * FROM cte;\n')}>
-                        <code>WITH cte AS (...)</code>
-                        <span>Common Table Exp.</span>
-                      </button>
+                <!-- Hint Section -->
+                {#if currentChallenge.hint}
+                  <div class="expansion-block">
+                    <button 
+                      class="expansion-header" 
+                      onclick={() => showHint = !showHint}
+                    >
+                      <HelpCircle size={14} class="header-icon" />
+                      <span>Need a Hint?</span>
+                      <span class="caret" class:open={showHint}>▼</span>
+                    </button>
+                    {#if showHint}
+                      <div class="expansion-content">
+                        <p>{@html parseMarkdown(currentChallenge.hint)}</p>
+                      </div>
                     {/if}
                   </div>
                 {/if}
-              </div>
+
+                <!-- Solution Section -->
+                {#if currentChallenge.solution}
+                  <div class="expansion-block solution-block">
+                    <button 
+                      class="expansion-header" 
+                      onclick={() => showSolution = !showSolution}
+                    >
+                      <Eye size={14} class="header-icon" />
+                      <span>Show Solution</span>
+                      <span class="caret" class:open={showSolution}>▼</span>
+                    </button>
+                    {#if showSolution}
+                      <div class="expansion-content solution-content">
+                        <pre class="solution-code"><code>{currentChallenge.solution}</code></pre>
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
+              {:else}
+                <!-- Concept breakdown / guide -->
+                {#if activeTabLeft === 'concept'}
+                  {@const breakdown = getConceptBreakdown(currentChallenge.topic, currentChallenge.id)}
+                  <div class="concept-breakdown-wrapper">
+                    <div class="concept-header-pill">
+                      <GraduationCap size={12} style="margin-right: 4px;" />
+                      <span>{currentChallenge.topic.toUpperCase()}</span>
+                    </div>
+                    <h3 class="concept-title">{breakdown.title}</h3>
+                    <p class="concept-desc">{breakdown.desc}</p>
+                    
+                    {#if breakdown.diagram}
+                      <div class="concept-diagram-container">
+                        <div class="diagram-header-tag">VISUAL BLOCK FLOW</div>
+                        <pre class="concept-diagram"><code>{breakdown.diagram}</code></pre>
+                      </div>
+                    {/if}
+                    
+                    <div class="concept-keypoints-box">
+                      <div class="keypoints-header-tag">KEY TAKEAWAYS</div>
+                      <ul class="concept-keypoints">
+                        {#each breakdown.keyPoints as pt}
+                          <li>{pt}</li>
+                        {/each}
+                      </ul>
+                    </div>
+
+                    {#if breakdown.example}
+                      <div class="concept-example-box">
+                        <div class="example-header-tag">SYNTAX EXAMPLE</div>
+                        <pre class="concept-example-code"><code>{breakdown.example}</code></pre>
+                        <button class="concept-use-btn" onclick={() => insertSnippet(breakdown.example + '\n')} title="Insert this code example into editor">
+                          Insert into Editor
+                        </button>
+                      </div>
+                    {/if}
+                  </div>
+                {:else}
+                  <!-- Cheatsheet Section -->
+                  <div class="snippets-grid-tab">
+                    <p style="font-size: 11px; color: var(--color-muted); margin-bottom: 12px; line-height: 1.4;">
+                      Click any helper syntax snippet block below to insert it at your cursor in the editor workspace.
+                    </p>
+                    <div class="snippets-grid-compact">
+                      {#if activeLang === 'python'}
+                        <button class="snippet-item" onclick={() => insertSnippet('import numpy as np\n')}>
+                          <code>import numpy as np</code>
+                          <span>Import NumPy</span>
+                        </button>
+                        <button class="snippet-item" onclick={() => insertSnippet('import pandas as pd\n')}>
+                          <code>import pandas as pd</code>
+                          <span>Import Pandas</span>
+                        </button>
+                        <button class="snippet-item" onclick={() => insertSnippet('for i in range(10):\n    print(i)\n')}>
+                          <code>for i in range(10)</code>
+                          <span>For Loop</span>
+                        </button>
+                        <button class="snippet-item" onclick={() => insertSnippet('[x for x in items if x > 0]')}>
+                          <code>[x for x in list]</code>
+                          <span>List Comprehension</span>
+                        </button>
+                        <button class="snippet-item" onclick={() => insertSnippet('np.mean(arr)')}>
+                          <code>np.mean(arr)</code>
+                          <span>Mean calculation</span>
+                        </button>
+                        <button class="snippet-item" onclick={() => insertSnippet('df.groupby(\'col\').mean()')}>
+                          <code>df.groupby()</code>
+                          <span>Pandas GroupBy</span>
+                        </button>
+                      {:else}
+                        <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table;\n')}>
+                          <code>SELECT * FROM...</code>
+                          <span>Select All</span>
+                        </button>
+                        <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table\nWHERE condition;\n')}>
+                          <code>WHERE ...</code>
+                          <span>Filter rows</span>
+                        </button>
+                        <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM t1\nJOIN t2 ON t1.id = t2.t1_id;\n')}>
+                          <code>INNER JOIN ...</code>
+                          <span>Join tables</span>
+                        </button>
+                        <button class="snippet-item" onclick={() => insertSnippet('SELECT col, COUNT(*)\nFROM table\nGROUP BY col;\n')}>
+                          <code>GROUP BY ...</code>
+                          <span>Aggregation</span>
+                        </button>
+                        <button class="snippet-item" onclick={() => insertSnippet('SELECT col, ROW_NUMBER() OVER (PARTITION BY col2 ORDER BY col3) as rnk\nFROM table;\n')}>
+                          <code>ROW_NUMBER() OVER...</code>
+                          <span>Window Function</span>
+                        </button>
+                        <button class="snippet-item" onclick={() => insertSnippet('WITH cte AS (\n  SELECT * FROM table\n)\nSELECT * FROM cte;\n')}>
+                          <code>WITH cte AS (...)</code>
+                          <span>Common Table Exp.</span>
+                        </button>
+                      {/if}
+                    </div>
+                  </div>
+                {/if}
+              {/if}
 
               <!-- Sandbox Control Panels -->
               {#if isSandboxMode}
@@ -822,7 +893,6 @@
                 class:active={workspaceMode === 'notebook'} 
                 onclick={() => workspaceMode = workspaceMode === 'editor' ? 'notebook' : 'editor'} 
                 title="Toggle Jupyter Notebook mode"
-                style="background: var(--color-accent-glow); border-color: var(--color-primary); color: var(--color-primary); font-weight: bold; margin: 0 4px;"
               >
                 {workspaceMode === 'editor' ? 'Notebook' : 'Editor'}
               </button>
@@ -852,6 +922,7 @@
               <Notebook 
                 challengeId={currentChallenge.id} 
                 language={activeLang} 
+                starterCode={code || currentChallenge.starterCode}
                 onNotebookCodeChange={applyFormattedCode}
               />
             {/if}
@@ -1382,6 +1453,188 @@
     width: 100%;
   }
 
+  .panel-header-row.left-tabs-header {
+    padding: 0 10px 0 16px;
+    height: 42px;
+  }
+
+  /* Left Panel Tabs Navigation */
+  .left-panel-tabs {
+    display: flex;
+    align-items: stretch;
+    height: 100%;
+    gap: 16px;
+  }
+
+  .left-tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--color-muted);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px;
+    height: 42px;
+    transition: all 0.2s;
+  }
+
+  .left-tab-btn:hover {
+    color: var(--color-ink);
+  }
+
+  .left-tab-btn.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+  }
+
+  /* Scrollable Left content */
+  .scrollable-left-content {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  /* Concept Breakdown View */
+  .concept-breakdown-wrapper {
+    display: flex;
+    flex-direction: column;
+    color: var(--color-ink);
+  }
+
+  .concept-header-pill {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    background: var(--color-accent-glow);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    letter-spacing: 0.05em;
+  }
+
+  .concept-title {
+    font-size: 14px;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    color: var(--color-ink);
+  }
+
+  .concept-desc {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-muted);
+    margin: 0 0 16px 0;
+  }
+
+  .concept-diagram-container,
+  .concept-keypoints-box,
+  .concept-example-box {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    margin-bottom: 14px;
+  }
+
+  .diagram-header-tag,
+  .keypoints-header-tag,
+  .example-header-tag {
+    font-family: var(--font-body);
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--color-muted);
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--color-hairline);
+    padding-bottom: 4px;
+  }
+
+  .concept-diagram {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--color-ink);
+    overflow-x: auto;
+    white-space: pre;
+    background: var(--color-canvas);
+    padding: 8px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-hairline);
+  }
+
+  .concept-keypoints {
+    margin: 0;
+    padding-left: 16px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--color-muted);
+  }
+
+  .concept-keypoints li {
+    margin-bottom: 6px;
+  }
+
+  .concept-keypoints li::marker {
+    color: var(--color-primary);
+  }
+
+  .concept-example-code {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-success);
+    background: var(--color-canvas);
+    padding: 8px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-hairline);
+    overflow-x: auto;
+  }
+
+  .concept-use-btn {
+    margin-top: 10px;
+    background: var(--color-accent-glow);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    font-family: var(--font-body);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 4px 12px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .concept-use-btn:hover {
+    background: var(--color-primary);
+    color: var(--color-canvas);
+  }
+
+  /* Snippets tab compact grid styles */
+  .snippets-grid-tab {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .snippets-grid-compact {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
   .panel-toggle-btn {
     background: transparent;
     border: 1px solid transparent;
@@ -1489,23 +1742,52 @@
     text-align: center;
   }
 
-  .editor-ctrl-btn.wrap-btn {
+  .editor-ctrl-btn.wrap-btn,
+  .editor-ctrl-btn.mode-toggle-btn,
+  .editor-ctrl-btn.download-code-btn {
     background: var(--color-canvas);
     border: 1px solid var(--color-hairline);
     color: var(--color-muted);
-    padding: 2px 8px;
+    padding: 3px 10px;
     width: auto;
     height: auto;
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border-radius: var(--radius-xs);
   }
 
   .editor-ctrl-btn.wrap-btn.active {
     border-color: var(--color-success-border);
     background: var(--color-success-bg);
     color: var(--color-primary);
+  }
+
+  .editor-ctrl-btn.mode-toggle-btn {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: transparent;
+  }
+
+  .editor-ctrl-btn.mode-toggle-btn.active {
+    background: var(--color-accent-glow);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .editor-ctrl-btn.download-code-btn {
+    color: var(--color-muted);
+  }
+
+  .editor-ctrl-btn.download-code-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: var(--color-accent-glow);
   }
 
   .editor-container-wrap {
