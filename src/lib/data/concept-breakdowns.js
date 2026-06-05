@@ -11,20 +11,26 @@ const breakdowns = {
     diagram: `[Value: "Hello, World!"] (String Object)
        ▲
        │  (Assignment via '=')
-[Variable: result]`,
+ [Variable: result]`,
     keyPoints: [
       "Strings can be enclosed in single quotes (') or double quotes (\").",
       "No semicolons (;) are required at the end of statements.",
       "Python variables are labels pointing to objects in memory."
     ],
-    example: "result = 'Hello, World!'\nprint(result) # Output: Hello, World!"
+    example: "result = 'Hello, World!'\nprint(result) # Output: Hello, World!",
+    quiz: {
+      question: "What is the result of executing `x = 5; y = x; x = 10; print(y)` in Python?",
+      options: ["10", "5", "NameError", "None"],
+      answer: 1,
+      explanation: "Python variables point to objects. When `y = x` runs, `y` points to the object `5`. Modifying `x` to point to `10` does not alter what `y` points to."
+    }
   },
 
   "arithmetic operators": {
     title: "Arithmetic Operations & Tuples",
     desc: "Python supports standard arithmetic: Addition (+), Subtraction (-), and Multiplication (*). Results can be packed into an immutable tuple structure `(x, y, z)`.",
     diagram: `Operands:  a = 15,  b = 4
-
+ 
 Addition       a + b  ──► 19
 Subtraction    a - b  ──► 11   ──► Packed into Tuple: (19, 11, 60)
 Multiplication a * b  ──► 60`,
@@ -33,14 +39,20 @@ Multiplication a * b  ──► 60`,
       "Tuples are immutable, meaning they cannot be modified after creation.",
       "They are useful for returning multiple values from a single block."
     ],
-    example: "a = 15\nb = 4\nresult = (a + b, a - b, a * b) # (19, 11, 60)"
+    example: "a = 15\nb = 4\nresult = (a + b, a - b, a * b) # (19, 11, 60)",
+    quiz: {
+      question: "Which of the following creates a tuple with a single element in Python?",
+      options: ["(5)", "(5,)", "tuple(5)", "[5]"],
+      answer: 1,
+      explanation: "To define a single-element tuple, you must include a trailing comma, e.g. `(5,)`. Without it, Python parses the parentheses as normal expression grouping, resulting in an integer."
+    }
   },
 
   "division": {
     title: "Floor Division vs Float Division",
     desc: "Python provides two division operators: `/` for standard float division, and `//` for floor division (which discards the fractional part).",
     diagram: `Numerator: 21, Denominator: 5
-
+ 
 Standard Division (/) ──► 21 / 5  ──► 4.2 (Float)
 Floor Division (//)    ──► 21 // 5 ──► 4   (Integer, rounded down)`,
     keyPoints: [
@@ -48,7 +60,13 @@ Floor Division (//)    ──► 21 // 5 ──► 4   (Integer, rounded down)`,
       "Floor Division (`//`) rounds down to the nearest mathematical integer.",
       "Modulo (`%`) returns the remainder of the floor division (e.g. `21 % 5 = 1`)."
     ],
-    example: "float_div = 21 / 5   # 4.2\nfloor_div = 21 // 5  # 4\nremainder = 21 % 5   # 1"
+    example: "float_div = 21 / 5   # 4.2\nfloor_div = 21 // 5  # 4\nremainder = 21 % 5   # 1",
+    quiz: {
+      question: "What does `-11 // 3` evaluate to in Python?",
+      options: ["-3", "-3.66", "-4", "-3.0"],
+      answer: 2,
+      explanation: "Floor division `//` rounds down towards negative infinity. `-11 / 3` is `-3.66...`, which floors down to `-4`."
+    }
   },
 
   "functions & logic": {
@@ -66,7 +84,13 @@ Floor Division (//)    ──► 21 // 5 ──► 4   (Integer, rounded down)`,
       "Modulo check `year % 4 == 0` evaluates if a number is divisible by 4.",
       "Returning functions: Assigning a function name without `()` references the callable itself."
     ],
-    example: "def is_even(num):\n    return num % 2 == 0\n\nresult = is_even # Assign reference"
+    example: "def is_even(num):\n    return num % 2 == 0\n\nresult = is_even # Assign reference",
+    quiz: {
+      question: "What does `type(func)` return if `func` is defined as `def func(): pass`?",
+      options: ["<class 'function'>", "<class 'NoneType'>", "<class 'type'>", "SyntaxError"],
+      answer: 0,
+      explanation: "In Python, functions are first-class objects. Referencing `func` without parentheses returns the function object itself, which belongs to the class `function`."
+    }
   },
 
   "lists": {
@@ -84,7 +108,13 @@ Sorted:   [5, 6, 7, 8]  ──► Index [-2] is 7 (Runner-up)`,
       "`sorted()` returns a new sorted list ascending.",
       "Index `[-1]` accesses the largest, `[-2]` accesses the second-largest."
     ],
-    example: "scores = [3, 5, 5, 4]\nuniques = sorted(list(set(scores))) # [3, 4, 5]\nrunner_up = uniques[-2] # 4"
+    example: "scores = [3, 5, 5, 4]\nuniques = sorted(list(set(scores))) # [3, 4, 5]\nrunner_up = uniques[-2] # 4",
+    quiz: {
+      question: "If `a = [1, 2, 3]` and `b = a`, what is `a` after running `b.append(4)`?",
+      options: ["[1, 2, 3]", "[1, 2, 3, 4]", "AttributeError", "[4]"],
+      answer: 1,
+      explanation: "Lists are mutable. Since `b = a` points to the exact same list object in memory, modifying `b` via `.append()` also alters the list accessed through `a`."
+    }
   },
 
   "list comprehension": {
@@ -98,7 +128,13 @@ Sorted:   [5, 6, 7, 8]  ──► Index [-2] is 7 (Runner-up)`,
       "Conditionals are optional but provide inline filtering.",
       "Squaring syntax is `x ** 2` or `pow(x, 2)`."
     ],
-    example: "nums = [1, 2, 3, 4]\nresult = [x**2 for x in nums if x % 2 != 0] # [1, 9]"
+    example: "nums = [1, 2, 3, 4]\nresult = [x**2 for x in nums if x % 2 != 0] # [1, 9]",
+    quiz: {
+      question: "What is the output of `[x for x in range(3) if x % 2 == 0]`?",
+      options: ["[0, 2]", "[0, 1, 2]", "[2]", "[1]"],
+      answer: 0,
+      explanation: "`range(3)` produces `0, 1, 2`. The filter `x % 2 == 0` keeps only the even numbers, which are `0` and `2`."
+    }
   },
 
   "strings": {
@@ -114,7 +150,13 @@ Result String:  "Student: Alice scored 95%"`,
       "Strings support methods like `.lower()`, `.upper()`, `.split()`, and `.strip()`.",
       "Path extraction is best handled using the `pathlib` module."
     ],
-    example: "user = \"Sensei\"\nmsg = f\"Welcome back, {user}!\" # \"Welcome back, Sensei!\""
+    example: "user = \"Sensei\"\nmsg = f\"Welcome back, {user}!\" # \"Welcome back, Sensei!\"",
+    quiz: {
+      question: "Which string method removes both leading and trailing whitespace?",
+      options: [".trim()", ".strip()", ".clean()", ".replace(' ', '')"],
+      answer: 1,
+      explanation: "Python uses `.strip()` to clean leading and trailing whitespace. `.trim()` is used in Javascript/Java but does not exist in Python."
+    }
   },
 
   "regular expressions": {
@@ -130,7 +172,13 @@ Result:  ['4509']`,
       "`re.sub(pattern, replacement, text)` replaces matches with a new string.",
       "Use raw strings `r'...'` to define regex patterns to avoid escaping backslashes."
     ],
-    example: "import re\ntext = \"Vitals: 120 bpm\"\nbpm = re.findall(r'\\d+', text)[0] # \"120\""
+    example: "import re\ntext = \"Vitals: 120 bpm\"\nbpm = re.findall(r'\\d+', text)[0] # \"120\"",
+    quiz: {
+      question: "In Python's `re` module, what does the pattern `r'\\d+'` match?",
+      options: ["One or more digits", "Any word characters", "Only whitespace", "Exactly one digit"],
+      answer: 0,
+      explanation: "`\\d` matches any decimal digit, and the `+` quantifier matches one or more repetitions of the preceding character."
+    }
   },
 
   "numpy": {
@@ -146,7 +194,13 @@ Result:  ['4509']`,
       "Arrays must contain elements of the same datatype.",
       "Common aggregations: `np.mean()`, `np.median()`, `np.std()`, `np.dot()`."
     ],
-    example: "import numpy as np\narr = np.array([10, 20, 30])\nmean = np.mean(arr) # 20.0"
+    example: "import numpy as np\narr = np.array([10, 20, 30])\nmean = np.mean(arr) # 20.0",
+    quiz: {
+      question: "What happens when you execute `np.array([1, 2]) * np.array([3, 4])`?",
+      options: ["Matrix dot product: 11", "Element-wise multiplication: [3, 8]", "ValueError: Size mismatch", "TypeError"],
+      answer: 1,
+      explanation: "NumPy arrays perform element-wise arithmetic by default when using the `*` operator, yielding `[1*3, 2*4]` which is `[3, 8]`."
+    }
   },
 
   "pandas": {
@@ -164,7 +218,13 @@ GroupBy Operation: df.groupby('department').sum()`,
       "Use `.loc[]` and `.iloc[]` for label-based and integer-based slicing.",
       "Casting outputs: Use `df.to_dict()` or `df.values.tolist()` to export data."
     ],
-    example: "import pandas as pd\ndf = pd.DataFrame({'val': [1, 2, 3]})\nsum_val = df['val'].sum() # 6"
+    example: "import pandas as pd\ndf = pd.DataFrame({'val': [1, 2, 3]})\nsum_val = df['val'].sum() # 6",
+    quiz: {
+      question: "How do you select rows in a Pandas DataFrame `df` where the column 'A' is greater than 5?",
+      options: ["df.filter(A > 5)", "df[df['A'] > 5]", "df.select('A' > 5)", "df.where('A' > 5)"],
+      answer: 1,
+      explanation: "Boolean indexing `df[df['A'] > 5]` is the standard way to filter rows in a Pandas DataFrame."
+    }
   },
 
   "scikit-learn": {
@@ -178,7 +238,13 @@ New Data (X_test) ──► Estimator.predict(X_test) ──► Predictions`,
       "Use `.transform(X)` or `.fit_transform(X)` for scaling/dimensionality reductions.",
       "Support Vector Machines (SVM) classify items by finding the optimal dividing hyperplane."
     ],
-    example: "from sklearn.svm import SVC\nclf = SVC()\nclf.fit(X_train, y_train)\npreds = clf.predict(X_test)"
+    example: "from sklearn.svm import SVC\nclf = SVC()\nclf.fit(X_train, y_train)\npreds = clf.predict(X_test)",
+    quiz: {
+      question: "Which method is used in Scikit-Learn to fit a model and make predictions in a single step?",
+      options: [".fit_predict()", ".train_predict()", ".run()", ".fit_transform()"],
+      answer: 0,
+      explanation: "Estimators like clustering algorithms or some classifiers support `.fit_predict(X)` to fit the model and return predictions in one step."
+    }
   },
 
   // --- SQL CONCEPTS ---
@@ -198,7 +264,13 @@ Result: ['Alice']`,
       "Logical operators: `AND`, `OR`, `NOT`, and comparisons `=`, `>`, `<`, `!=` are supported.",
       "`LIMIT n` bounds the output to a maximum of `n` rows."
     ],
-    example: "SELECT name, salary FROM employees\nWHERE salary > 70000\nLIMIT 5;"
+    example: "SELECT name, salary FROM employees\nWHERE salary > 70000\nLIMIT 5;",
+    quiz: {
+      question: "In SQL, which operator is used for pattern matching using wildcards?",
+      options: ["MATCH", "LIKE", "CONTAINS", "IN"],
+      answer: 1,
+      explanation: "The `LIKE` operator is used with `%` (zero or more chars) and `_` (exactly one char) for wildcard-based pattern matching."
+    }
   },
 
   "joins": {
@@ -217,7 +289,13 @@ Result matching: order 1 (cust_id 10) joins Alice (id 10). (Bob/id 20 missing)`,
       "`LEFT JOIN` returns all rows from the left table, and matched rows from the right table (NULL if no match).",
       "Always qualify join columns: `orders.customer_id = customers.id`."
     ],
-    example: "SELECT o.id, c.name, o.amount\nFROM orders o\nJOIN customers c ON o.customer_id = c.id;"
+    example: "SELECT o.id, c.name, o.amount\nFROM orders o\nJOIN customers c ON o.customer_id = c.id;",
+    quiz: {
+      question: "What values will columns from the right table have in a `LEFT JOIN` if no match is found on the join key?",
+      options: ["0", "Empty string ''", "NULL", "An error is thrown"],
+      answer: 2,
+      explanation: "A `LEFT JOIN` guarantees all rows from the left table are returned. If a row has no matching key on the right table, columns from the right table are filled with `NULL`."
+    }
   },
 
   "group by": {
@@ -238,7 +316,13 @@ Tech ──► [8000, 9000]    ──► AVG() = 8500`,
       "Use `HAVING` (instead of `WHERE`) to filter aggregated summary rows.",
       "Use `COUNT(DISTINCT col)` to calculate unique values in partitions."
     ],
-    example: "SELECT department, COUNT(*) as emp_count, AVG(salary) as avg_sal\nFROM employees\nGROUP BY department\nHAVING avg_sal > 60000;"
+    example: "SELECT department, COUNT(*) as emp_count, AVG(salary) as avg_sal\nFROM employees\nGROUP BY department\nHAVING avg_sal > 60000;",
+    quiz: {
+      question: "Which SQL clause is used to filter group results after grouping has occurred?",
+      options: ["WHERE", "HAVING", "FILTER", "LIMIT"],
+      answer: 1,
+      explanation: "The `HAVING` clause filters aggregated group results, while `WHERE` filters individual rows before grouping."
+    }
   },
 
   "ctes": {
@@ -254,7 +338,13 @@ WHERE salary > 80000;`,
       "Declared using the `WITH` keyword followed by the CTE query name.",
       "Can be combined: `WITH cte1 AS (...), cte2 AS (...) SELECT ...`."
     ],
-    example: "WITH high_earners AS (\n  SELECT * FROM employees WHERE salary > 90000\n)\nSELECT department, COUNT(*) FROM high_earners\nGROUP BY department;"
+    example: "WITH high_earners AS (\n  SELECT * FROM employees WHERE salary > 90000\n)\nSELECT department, COUNT(*) FROM high_earners\nGROUP BY department;",
+    quiz: {
+      question: "What keyword is used to start a Common Table Expression (CTE) in SQL?",
+      options: ["WITH", "CREATE CTE", "DEFINE", "AS"],
+      answer: 0,
+      explanation: "A CTE is defined using the `WITH` keyword, followed by the CTE name, `AS`, and the subquery in parentheses."
+    }
   },
 
   "case statements": {
@@ -272,7 +362,13 @@ END as salary_tier`,
       "Must always close with the `END` keyword.",
       "Can be placed inside aggregation functions (e.g., `SUM(CASE WHEN...)`)."
     ],
-    example: "SELECT name,\n  CASE WHEN department = 'Tech' THEN salary * 1.1\n       ELSE salary * 1.05\n  END as proposed_salary\nFROM employees;"
+    example: "SELECT name,\n  CASE WHEN department = 'Tech' THEN salary * 1.1\n       ELSE salary * 1.05\n  END as proposed_salary\nFROM employees;",
+    quiz: {
+      question: "What happens if no `WHEN` condition is met in a SQL `CASE` statement and there is no `ELSE` clause?",
+      options: ["Throws an error", "Returns 0", "Returns NULL", "Returns the first column value"],
+      answer: 2,
+      explanation: "If no conditions match and no `ELSE` clause is specified, SQL default evaluates the `CASE` statement as `NULL`."
+    }
   },
 
   "window functions": {
@@ -289,7 +385,13 @@ John        | 7000   | 3`,
       "Maintains the identity of individual rows (unlike `GROUP BY` aggregates).",
       "Common functions: `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LAG()`, `LEAD()`."
     ],
-    example: "SELECT name, department, salary,\n  RANK() OVER (PARTITION BY department ORDER BY salary DESC) as rank\nFROM employees;"
+    example: "SELECT name, department, salary,\n  RANK() OVER (PARTITION BY department ORDER BY salary DESC) as rank\nFROM employees;",
+    quiz: {
+      question: "What is the key difference between `RANK()` and `DENSE_RANK()`?",
+      options: ["RANK() has no ordering", "DENSE_RANK() does not skip ranks for duplicate values", "RANK() partitions data automatically", "DENSE_RANK() only works on numbers"],
+      answer: 1,
+      explanation: "When values tie, both rank them identically, but `RANK()` leaves gaps in the rank sequence (e.g. 1, 2, 2, 4), whereas `DENSE_RANK()` does not leave gaps (e.g. 1, 2, 2, 3)."
+    }
   }
 };
 
@@ -323,6 +425,12 @@ export function getConceptBreakdown(topic, id) {
       "Run your script using the Run button to verify console prints.",
       "Check the checklist panel for failing validation assertion lines."
     ],
-    example: id ? `# Active exercise id: ${id}` : ""
+    example: id ? `# Active exercise id: ${id}` : "",
+    quiz: {
+      question: "Which of the following is the main query engine used for SQL in the Gemini Dojo?",
+      options: ["MySQL", "SQLite", "PostgreSQL", "MongoDB"],
+      answer: 1,
+      explanation: "Gemini Dojo runs standard SQL syntax inside an in-browser SQLite database instance powered by SQL.js."
+    }
   };
 }

@@ -25,14 +25,33 @@
   $effect(() => {
     const key = `dojo_notebook_${challengeId}_${language}`;
     const saved = localStorage.getItem(key);
+    let parsed = null;
     if (saved) {
       try {
-        cells = JSON.parse(saved);
+        parsed = JSON.parse(saved);
+      } catch (e) {
+        console.error("Error parsing saved notebook: ", e);
+      }
+    }
+
+    const PY_BOILERPLATE = '# Write your python notebook cell here\nimport numpy as np\narr = np.array([1, 2, 3, 4])\nprint("Array multiplied by 3:")\narr * 3';
+    const SQL_BOILERPLATE = '-- Write your SQL query here\nSELECT * FROM employees LIMIT 3;\n';
+
+    // Self-heal saved notebooks if they only have the boilerplate cell
+    if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+      let isPolluted = false;
+      if (parsed.length === 1 && parsed[0].type === 'code') {
+        const contentClean = parsed[0].content.trim();
+        if (contentClean === PY_BOILERPLATE.trim() || contentClean === SQL_BOILERPLATE.trim() || 
+            (language === 'python' && contentClean.includes('Array multiplied by 3:') && challengeId !== 'sandbox' && challengeId !== 'ch02-numpy-basic')) {
+          isPolluted = true;
+        }
+      }
+      if (!isPolluted) {
+        cells = parsed;
         loadedChallengeId = challengeId;
         loadedLanguage = language;
         return;
-      } catch (e) {
-        console.error("Error parsing saved notebook: ", e);
       }
     }
     
@@ -41,9 +60,11 @@
       {
         id: 'cell-' + Date.now() + Math.random().toString(36).substr(2, 5),
         type: 'code',
-        content: starterCode || (language === 'python' 
-          ? '# Write your python notebook cell here\nimport numpy as np\narr = np.array([1, 2, 3, 4])\nprint("Array multiplied by 3:")\narr * 3'
-          : '-- Write your SQL query here\nSELECT * FROM employees LIMIT 3;\n'),
+        content: (starterCode && starterCode !== PY_BOILERPLATE && starterCode !== SQL_BOILERPLATE) 
+          ? starterCode 
+          : (language === 'python' 
+            ? '# Write your python notebook cell here\nimport numpy as np\narr = np.array([1, 2, 3, 4])\nprint("Array multiplied by 3:")\narr * 3'
+            : '-- Write your SQL query here\nSELECT * FROM employees LIMIT 3;\n'),
         output: '',
         error: '',
         resultRepr: '',
