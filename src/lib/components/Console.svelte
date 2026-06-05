@@ -1,5 +1,7 @@
 <script>
-  import { Terminal, AlertCircle, CheckCircle, Database, HelpCircle, Download } from 'lucide-svelte';
+  import { Terminal, AlertCircle, CheckCircle, Database, HelpCircle, Download, Cpu } from 'lucide-svelte';
+  import TableEditor from './TableEditor.svelte';
+  import ExplainVisualizer from './ExplainVisualizer.svelte';
 
   let { 
     type = 'python',
@@ -11,12 +13,43 @@
     dbState = {},
     hasRun = false,
     isRunning = false,
-    executionTime = null
+    executionTime = null,
+    rawQuery = '',
+    onExecuteQuery = null
   } = $props();
 
   let activeTab = $state('console'); // 'console' | 'table-data' | 'visuals'
   let activeTablePreview = $state('');
   let consoleBodyRef = $state(null);
+
+  // Explain Query Plan states (Item 156)
+  let explainData = $state([]);
+  let isExplaining = $state(false);
+
+  async function runExplainAnalysis() {
+    activeTab = 'explain';
+    if (!onExecuteQuery || !rawQuery) return;
+    
+    isExplaining = true;
+    try {
+      const outcome = await onExecuteQuery("EXPLAIN QUERY PLAN " + rawQuery);
+      if (outcome.success && outcome.result && outcome.result.length > 0) {
+        const resultRows = outcome.result[0].values;
+        explainData = resultRows.map(row => ({
+          id: row[0],
+          parent: row[1],
+          notused: row[2],
+          detail: row[3]
+        }));
+      } else {
+        explainData = [];
+      }
+    } catch (e) {
+      console.error(e);
+      explainData = [];
+    }
+    isExplaining = false;
+  }
 
   // Charting visuals states
   let chartType = $state('bar'); // 'bar' | 'line' | 'area'
@@ -297,6 +330,17 @@
         </button>
       {/if}
 
+      {#if type === 'sql' && hasRun && !error}
+        <button 
+          class="tab-btn" 
+          class:active={activeTab === 'explain'} 
+          onclick={runExplainAnalysis}
+        >
+          <Cpu size={14} class="tab-icon" />
+          <span>Explain Plan</span>
+        </button>
+      {/if}
+
       {#if type === 'sql' && queryResult && queryResult.length > 0}
         <button 
           class="tab-btn" 
@@ -505,7 +549,7 @@
       {/if}
 
     {:else if activeTab === 'table-data'}
-      <!-- SQL Table browser -->
+      <!-- SQL Table browser with Mutation controls (Item 136) -->
       <div class="table-browser-panel">
         <div class="browser-sidebar">
           {#each tableList as tbl}
@@ -520,31 +564,31 @@
         </div>
         <div class="browser-content">
           {#if activeTablePreview && dbState[activeTablePreview]}
-            <div class="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    {#each dbState[activeTablePreview][0].columns as col}
-                      <th>{col}</th>
-                    {/each}
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each dbState[activeTablePreview][0].values as row}
-                    <tr>
-                      {#each row as cell}
-                        <td>{cell === null ? 'NULL' : cell}</td>
-                      {/each}
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
+            <TableEditor 
+              tableName={activeTablePreview} 
+              columns={dbState[activeTablePreview][0].columns} 
+              rows={dbState[activeTablePreview][0].values} 
+              onExecuteQuery={onExecuteQuery} 
+            />
           {:else}
             <p class="empty-text">Table is empty or missing columns.</p>
           {/if}
         </div>
       </div>
+    {:else if activeTab === 'explain'}
+      <!-- Explain Plan visualizer panel (Item 156) -->
+      {#if isExplaining}
+        <div class="console-loading-state" style="padding: 40px; text-align: center;">
+          <div class="cyber-spinner" style="margin: 0 auto 12px auto;"></div>
+          <div class="loading-pulse-text">PARSING QUERY EXPLAIN PLAN...</div>
+        </div>
+      {:else}
+        <ExplainVisualizer 
+          explainRows={explainData} 
+          tableNameList={tableList} 
+          onExecuteQuery={onExecuteQuery} 
+        />
+      {/if}
     {:else if activeTab === 'visuals' && queryResult && queryResult.length > 0}
       <!-- Visual Analytics Panel -->
       <div class="visuals-panel">

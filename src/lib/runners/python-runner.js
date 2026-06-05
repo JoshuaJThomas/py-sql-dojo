@@ -145,3 +145,47 @@ __results_json__ = json.dumps(__results_list__)
     checksResults
   };
 }
+
+export async function runPythonCell(code) {
+  const pyodide = await loadPyodideInstance();
+  let stdoutContent = "";
+  pyodide.setStdout({
+    write: (text) => {
+      stdoutContent += text;
+      return text.length;
+    }
+  });
+
+  let error = null;
+  let success = false;
+  let resultRepr = "";
+
+  try {
+    await pyodide.loadPackagesFromImports(code);
+    const result = await pyodide.runPythonAsync(code);
+    success = true;
+    if (result !== undefined && result !== null) {
+      // If it is a PyProxy (e.g. DataFrame, Array), convert to string/JSON or representation
+      if (typeof result.toJs === 'function') {
+        try {
+          resultRepr = JSON.stringify(result.toJs(), null, 2);
+        } catch (e) {
+          resultRepr = String(result);
+        }
+      } else {
+        resultRepr = String(result);
+      }
+    }
+  } catch (err) {
+    error = err.message;
+    success = false;
+  }
+
+  return {
+    success,
+    stdout: stdoutContent,
+    error,
+    resultRepr
+  };
+}
+

@@ -5,6 +5,8 @@
   import Editor from './lib/components/Editor.svelte';
   import Console from './lib/components/Console.svelte';
   import SchemaBrowser from './lib/components/SchemaBrowser.svelte';
+  import Notebook from './lib/components/Notebook.svelte';
+  import MentorBot from './lib/components/MentorBot.svelte';
 
   // Import stores
   import { 
@@ -342,6 +344,26 @@
     
     // Execute
     applyCustomDdl();
+  }
+
+  // Workspace States (Notebook, Mentor Drawer)
+  let workspaceMode = $state('editor'); // 'editor' | 'notebook'
+  let showMentorDrawer = $state(false);
+
+  // Directly execute queries (explain query plan, table editor edits, DDL seeds)
+  async function runQueryDirectly(queryText) {
+    const seedToUse = (isSandboxMode && customDdlSeed.trim()) ? customDdlSeed : sqlDbSeed;
+    const outcome = await runSqlQuery(seedToUse, queryText);
+    if (outcome.success) {
+      sqlResult.dbState = outcome.dbState;
+      sqlResult.schema = outcome.schema;
+    }
+    return outcome;
+  }
+
+  // Inject formatted code callback
+  function applyFormattedCode(formatted) {
+    handleCodeChange(formatted);
   }
 
   // Show Toast badge unlocked
@@ -794,6 +816,17 @@
                 Wrap
               </button>
 
+              <!-- Notebook Toggle (Item 126) -->
+              <button 
+                class="editor-ctrl-btn mode-toggle-btn" 
+                class:active={workspaceMode === 'notebook'} 
+                onclick={() => workspaceMode = workspaceMode === 'editor' ? 'notebook' : 'editor'} 
+                title="Toggle Jupyter Notebook mode"
+                style="background: var(--color-accent-glow); border-color: var(--color-primary); color: var(--color-primary); font-weight: bold; margin: 0 4px;"
+              >
+                {workspaceMode === 'editor' ? 'Notebook' : 'Editor'}
+              </button>
+
               <!-- Download code button -->
               <button 
                 class="editor-ctrl-btn download-code-btn" 
@@ -807,13 +840,21 @@
           </div>
           
           <div class="editor-container-wrap">
-            <Editor 
-              bind:value={code} 
-              language={activeLang} 
-              onChange={handleCodeChange}
-              fontSize={editorFontSize}
-              wordWrap={editorWordWrap}
-            />
+            {#if workspaceMode === 'editor'}
+              <Editor 
+                bind:value={code} 
+                language={activeLang} 
+                onChange={handleCodeChange}
+                fontSize={editorFontSize}
+                wordWrap={editorWordWrap}
+              />
+            {:else}
+              <Notebook 
+                challengeId={currentChallenge.id} 
+                language={activeLang} 
+                onNotebookCodeChange={applyFormattedCode}
+              />
+            {/if}
           </div>
         </section>
 
@@ -866,6 +907,8 @@
                   hasRun={hasRun}
                   isRunning={isRunning}
                   executionTime={activeLang === 'python' ? pyResult.executionTime : sqlResult.executionTime}
+                  onExecuteQuery={runQueryDirectly}
+                  rawQuery={code}
                 />
               {:else}
                 <SchemaBrowser schema={sqlResult.schema || {}} dbState={sqlResult.dbState || {}} />
@@ -929,6 +972,36 @@
     </div>
   </div>
 {/if}
+
+<!-- Floating AI Mentor button (Item 166) -->
+<button 
+  class="floating-mentor-btn" 
+  onclick={() => showMentorDrawer = !showMentorDrawer} 
+  title="Ask AI Mentor for assistance"
+>
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+</button>
+
+{#if showMentorDrawer}
+  <div class="mentor-drawer-overlay">
+    <div class="mentor-drawer-card">
+      <div class="drawer-header">
+        <span>AI Dojo Mentor</span>
+        <button class="close-drawer-btn" onclick={() => showMentorDrawer = false}>✕</button>
+      </div>
+      <div class="drawer-body-wrap">
+        <MentorBot 
+          challengeId={currentChallenge.id}
+          language={activeLang}
+          currentCode={code}
+          lastError={activeLang === 'python' ? pyResult.error : sqlResult.error}
+          onApplyFormattedCode={applyFormattedCode}
+        />
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .dojo-layout {
     display: flex;
@@ -1852,5 +1925,89 @@
     .snippets-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  /* Floating AI Mentor Button & Drawer (Item 166) */
+  .floating-mentor-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    border: none;
+    color: var(--color-canvas);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 15px var(--color-accent-glow);
+    z-index: 999;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .floating-mentor-btn:hover {
+    transform: scale(1.1) rotate(5deg);
+  }
+
+  .mentor-drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .mentor-drawer-card {
+    width: 380px;
+    height: 100%;
+    background: var(--color-card-bg);
+    border-left: 1px solid var(--color-hairline);
+    display: flex;
+    flex-direction: column;
+    box-shadow: -5px 0 25px rgba(0,0,0,0.3);
+    animation: slide-in 0.25s ease-out forwards;
+  }
+
+  @keyframes slide-in {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  .drawer-header {
+    background: var(--color-tab-inactive);
+    border-bottom: 1px solid var(--color-hairline);
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted);
+  }
+
+  .close-drawer-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-muted);
+    font-size: 14px;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+
+  .close-drawer-btn:hover {
+    color: var(--color-ink);
+  }
+
+  .drawer-body-wrap {
+    flex: 1;
+    overflow: hidden;
   }
 </style>
