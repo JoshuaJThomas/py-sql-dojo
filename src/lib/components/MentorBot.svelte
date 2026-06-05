@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { Send, Bot, RefreshCw, MessageSquare, ShieldAlert, Sparkles, Smile, Code } from 'lucide-svelte';
   import { parseMarkdown } from '../utils/markdown.js';
+  import { inventory } from '../stores/dojo-store.js';
 
   let { 
     challengeId = 'sandbox',
@@ -15,13 +16,14 @@
   let chatHistory = $state([]);
   let userQuery = $state('');
   let isTyping = $state(false);
-  let activePersona = $state('sensei'); // 'sensei' | 'hacker' | 'techlead'
+  let activePersona = $state('sensei'); // 'sensei' | 'hacker' | 'techlead' | 'wizard'
 
   // Persona definitions
   const personas = {
     sensei: { name: 'Sensei Gemini', title: 'Dojo Grandmaster', avatar: '🥋', greeting: 'Greetings, student. Let us examine your algorithm and polish your craft.' },
     hacker: { name: 'Cyber Hacker', title: 'System Intruder', avatar: '💻', greeting: 'Yo. Ready to exploit the database and inject some hyper-efficient scripts?' },
-    techlead: { name: 'Tech Lead', title: 'Staff Engineer', avatar: '👔', greeting: 'Let us run a code review. Keep it production-ready and scale-invariant.' }
+    techlead: { name: 'Tech Lead', title: 'Staff Engineer', avatar: '👔', greeting: 'Let us run a code review. Keep it production-ready and scale-invariant.' },
+    wizard: { name: 'SQL Wizard', title: 'Database Sorcerer', avatar: '🧙‍♂️', greeting: 'Ah! Speak the magic incantations. Together we shall conjure query execution plans that bend the database engine to our will.' }
   };
 
   // Preloaded mock responses based on challenge context & queries
@@ -133,24 +135,40 @@
     let answer = "";
     const lowerQ = typeof inputQuery === 'string' ? inputQuery.toLowerCase() : "";
 
-    if (inputQuery === 'explain-error') {
-      answer = lastError 
-        ? `**Diagnostic Analysis:**\nYour program failed with the following traceback:\n\`${lastError}\`.\n\n*Suggestions:*\n1. Verify column or variable spelling.\n2. In Python, ensure correct indentation blocks.\n3. In SQL, check if you're aliasing joined tables correctly.`
-        : `Your code looks syntactically sound, but verify logic requirements. Check if you completed all requirements list points on the left panel!`;
-    } else if (inputQuery === 'optimize') {
-      answer = mockResponses.optimize[language];
-    } else if (inputQuery === 'explain-concept') {
-      answer = mockResponses.general[language];
-    } else {
-      // General NLP matcher
-      if (lowerQ.includes('error') || lowerQ.includes('fail') || lowerQ.includes('bug')) {
-        answer = "Let's review the syntax error. Make sure brackets match and commas exist. If there's an assertion failing, compare expected vs actual panes.";
-      } else if (lowerQ.includes('join') || lowerQ.includes('table')) {
-        answer = "In SQL, JOINs link tables. Remember: `INNER JOIN` returns matching rows, while `LEFT JOIN` preserves all rows from the left table, inserting `NULL` for missing rights.";
-      } else if (lowerQ.includes('pandas') || lowerQ.includes('dataframe')) {
-        answer = "For Pandas, remember df.groupby() creates index objects. You can chain `.mean()` or `.agg()` to perform aggregate operations on columns.";
+    if (activePersona === 'wizard') {
+      if (inputQuery === 'explain-error') {
+        answer = lastError 
+          ? `🔮 **Wizard's Diagnostic Arcana:**\nThe query incantation has failed with this traceback:\n\`${lastError}\`.\n\n*Sorcerer's Suggestions:*\n1. Check for typos in table or column names.\n2. Ensure column constraints or references align with primary/foreign keys.\n3. Make sure table aliases match in JOIN and SELECT clauses.`
+          : `🔮 **Wizard's Diagnostic Arcana:**\nYour incantation runs without syntax errors, but the tests are not satisfied. Ensure you have targeted all requirements!`;
+      } else if (inputQuery === 'optimize') {
+        answer = `🔮 **Wizard's Optimization Arcana:**\nTo optimize database performance, examine the \`EXPLAIN QUERY PLAN\` tree. Focus on avoiding \`SCAN TABLE\` (O(N) search) by introducing composite or single-column indexes on joining keys. Use \`USING INDEX\` or \`USING COVERING INDEX\` to unlock immediate speed boosts!`;
+      } else if (inputQuery === 'explain-concept') {
+        answer = `🔮 **Wizard's Query Whispers:**\nQueries are declarative formulas. The database optimizer builds a lookup plan. When using window functions (\`ROW_NUMBER() OVER\`), SQLite divides records into sub-partitions, sorted in-memory, without costly Cartesian self-joins!`;
+      } else if (lowerQ.includes('index') || lowerQ.includes('explain') || lowerQ.includes('slow')) {
+        answer = `🔮 **Wizard's Indexing Secrets:**\nIndexes are B-Trees created on table columns. Creating an index speeds up lookups but incurs tiny insert/update overheads. Look for \`SEARCH TABLE USING INDEX\` in the explain visualizer to verify index engagement!`;
       } else {
-        answer = `I hear you. As your ${personas[activePersona].title}, my advice is to review the exercise prompts, isolate variables, and execute one check at a time.`;
+        answer = `🔮 **Wizard's Counsel:**\nAh! The database spirits whisper. Let us craft query incantations. Write standard JOINs and keep where conditions targeted on indexed fields. What query plan shall we conjour?`;
+      }
+    } else {
+      if (inputQuery === 'explain-error') {
+        answer = lastError 
+          ? `**Diagnostic Analysis:**\nYour program failed with the following traceback:\n\`${lastError}\`.\n\n*Suggestions:*\n1. Verify column or variable spelling.\n2. In Python, ensure correct indentation blocks.\n3. In SQL, check if you're aliasing joined tables correctly.`
+          : `Your code looks syntactically sound, but verify logic requirements. Check if you completed all requirements list points on the left panel!`;
+      } else if (inputQuery === 'optimize') {
+        answer = mockResponses.optimize[language];
+      } else if (inputQuery === 'explain-concept') {
+        answer = mockResponses.general[language];
+      } else {
+        // General NLP matcher
+        if (lowerQ.includes('error') || lowerQ.includes('fail') || lowerQ.includes('bug')) {
+          answer = "Let's review the syntax error. Make sure brackets match and commas exist. If there's an assertion failing, compare expected vs actual panes.";
+        } else if (lowerQ.includes('join') || lowerQ.includes('table')) {
+          answer = "In SQL, JOINs link tables. Remember: `INNER JOIN` returns matching rows, while `LEFT JOIN` preserves all rows from the left table, inserting `NULL` for missing rights.";
+        } else if (lowerQ.includes('pandas') || lowerQ.includes('dataframe')) {
+          answer = "For Pandas, remember df.groupby() creates index objects. You can chain `.mean()` or `.agg()` to perform aggregate operations on columns.";
+        } else {
+          answer = `I hear you. As your ${personas[activePersona].title}, my advice is to review the exercise prompts, isolate variables, and execute one check at a time.`;
+        }
       }
     }
 
@@ -233,6 +251,11 @@
         <option value="sensei">Sensei Gemini</option>
         <option value="hacker">Cyber Hacker</option>
         <option value="techlead">Tech Lead</option>
+        {#if $inventory.unlockedPersonas?.includes('wizard')}
+          <option value="wizard">🧙‍♂️ SQL Wizard</option>
+        {:else}
+          <option value="wizard_locked" disabled>🧙‍♂️ SQL Wizard (Lock: 450 XP)</option>
+        {/if}
       </select>
     </div>
 

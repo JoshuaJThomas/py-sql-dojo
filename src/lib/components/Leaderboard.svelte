@@ -2,17 +2,41 @@
   import { onMount, untrack } from 'svelte';
   import { xp, level, completedChallenges, inventory } from '../stores/dojo-store.js';
   import { Trophy, Shield, MessageSquare, Clock, Zap, Star, ShieldCheck } from 'lucide-svelte';
+  import { playSuccessChime, playLevelUpFanfare, playErrorBuzz } from '../utils/soundscapes.js';
 
   let userXp = $derived($xp);
   let userLevel = $derived($level);
   let completedList = $derived($completedChallenges);
+
+  // Constants for league difficulty bases
+  const LEAGUE_XP_BASES = {
+    'Bronze League': 150,
+    'Silver League': 400,
+    'Gold League': 800,
+    'Emerald League': 1400,
+    'Diamond League': 2200
+  };
 
   // States
   let competitors = $state([]);
   let tournamentHours = $state(162); // Simulated countdown hours remaining
   let tournamentMinutes = $state(48);
   let activeHoverBot = $state(null);
-  let selectedTier = $state('Gold League');
+  
+  // Load user league tier from localStorage (defaulting to Bronze)
+  const savedUserLeague = typeof window !== 'undefined' ? localStorage.getItem('dojo_user_league') || 'Bronze League' : 'Bronze League';
+  let selectedTier = $state(savedUserLeague);
+
+  // Promotion/Conclude states
+  let showPromotionModal = $state(false);
+  let showConfetti = $state(false);
+  let promotionResult = $state({
+    rank: 1,
+    promoted: false,
+    rewardXp: 0,
+    oldLeague: 'Gold League',
+    newLeague: 'Emerald League'
+  });
 
   // Bot configuration
   const botBases = [
@@ -38,6 +62,9 @@
         tournamentMinutes = 59;
         if (tournamentHours > 0) {
           tournamentHours--;
+        } else {
+          // Timer ended
+          concludeTournament();
         }
       }
     }, 60000);
@@ -45,8 +72,13 @@
     return () => clearInterval(interval);
   });
 
+  // Get localized leaderboard key based on active tier
+  function getLeaderboardKey() {
+    return `dojo_leaderboard_bots_${selectedTier}`;
+  }
+
   function loadLeaderboard() {
-    const key = 'dojo_leaderboard_bots';
+    const key = getLeaderboardKey();
     const saved = localStorage.getItem(key);
     
     if (saved) {
@@ -58,10 +90,10 @@
       } catch (e) {}
     }
 
-    // Initialize bot scores
-    competitors = botBases.map((bot, idx) => {
-      // bots around user score
-      const botXp = Math.floor(100 + bot.baseSkill * 150 + Math.random() * 200);
+    // Initialize bot scores based on league difficulty base
+    const leagueBase = LEAGUE_XP_BASES[selectedTier] || 150;
+    competitors = botBases.map((bot) => {
+      const botXp = Math.floor(leagueBase + bot.baseSkill * (leagueBase * 0.4) + Math.random() * (leagueBase * 0.25));
       return {
         ...bot,
         xp: botXp,
@@ -72,7 +104,7 @@
       };
     });
 
-    // Add user placeholder
+    // Add user
     competitors.push({
       name: 'You (Dojo Apprentice)',
       title: 'Active Student',
@@ -136,7 +168,102 @@
   }
 
   function saveLeaderboard() {
-    localStorage.setItem('dojo_leaderboard_bots', JSON.stringify(competitors));
+    localStorage.setItem(getLeaderboardKey(), JSON.stringify(competitors));
+  }
+
+  // Conclude Tournament & Claim Rewards (Weekly Tournament Rewards)
+  function concludeTournament() {
+    const pos = userPosition;
+    const currentLeague = selectedTier;
+    let promoted = false;
+    let rewardXp = 0;
+    let newLeague = currentLeague;
+
+    const leaguesList = [
+      'Bronze League',
+      'Silver League',
+      'Gold League',
+      'Emerald League',
+      'Diamond League'
+    ];
+
+    const currentIdx = leaguesList.indexOf(currentLeague);
+
+    // Determine rewards & promotion
+    if (pos <= 3) {
+      promoted = true;
+      if (pos === 1) rewardXp = 300;
+      else if (pos === 2) rewardXp = 200;
+      else if (pos === 3) rewardXp = 100;
+      
+      // Advance to next league
+      if (currentIdx !== -1 && currentIdx < leaguesList.length - 1) {
+        newLeague = leaguesList[currentIdx + 1];
+        localStorage.setItem('dojo_user_league', newLeague);
+      }
+    } else {
+      promoted = false;
+      rewardXp = 20; // Consolation prize
+    }
+
+    // Award XP
+    xp.update(val => val + rewardXp);
+
+    promotionResult = {
+      rank: pos,
+      promoted,
+      rewardXp,
+      oldLeague: currentLeague,
+      newLeague
+    };
+
+    // Update active tier select box
+    selectedTier = newLeague;
+    showPromotionModal = true;
+    
+    // Play sounds & trigger confetti
+    if (promoted) {
+      playLevelUpFanfare();
+      showConfetti = true;
+      setTimeout(() => {
+        showConfetti = false;
+      }, 3500);
+    } else {
+      playErrorBuzz();
+    }
+    
+    // Reset timer
+    tournamentHours = 168; // 7 days
+    tournamentMinutes = 0;
+    
+    // Reset scores for all bots in the new league
+    const leagueBase = LEAGUE_XP_BASES[newLeague] || 150;
+    competitors = botBases.map((bot) => {
+      const botXp = Math.floor(leagueBase + bot.baseSkill * (leagueBase * 0.4) + Math.random() * (leagueBase * 0.25));
+      return {
+        ...bot,
+        xp: botXp,
+        level: Math.floor(botXp / 100) + 1,
+        badgesCount: Math.floor(bot.baseSkill * 3) + 1,
+        completions: Math.floor(botXp / 25),
+        isUser: false
+      };
+    });
+
+    // Add user back
+    competitors.push({
+      name: 'You (Dojo Apprentice)',
+      title: 'Active Student',
+      avatar: '🥋',
+      xp: userXp,
+      level: userLevel,
+      badgesCount: 0,
+      completions: completedList.length,
+      chat: 'Training hard!',
+      isUser: true
+    });
+
+    saveLeaderboard();
   }
 
   // Sort competitors by XP descending
@@ -154,6 +281,14 @@
     if (selectedTier.includes('Gold')) return '#fbbf24';
     if (selectedTier.includes('Emerald')) return '#10b981';
     return '#3b82f6'; // Diamond
+  });
+
+  // Reload leaderboard whenever user switches tier selection
+  $effect(() => {
+    const activeTier = selectedTier;
+    untrack(() => {
+      loadLeaderboard();
+    });
   });
 
   // Re-run user score sync whenever user XP updates
@@ -182,9 +317,14 @@
       </select>
     </div>
 
-    <div class="tournament-timer">
-      <Clock size={12} class="timer-icon" />
-      <span>Ends in: {tournamentHours}h {tournamentMinutes}m</span>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div class="tournament-timer">
+        <Clock size={12} class="timer-icon" />
+        <span>Ends in: {tournamentHours}h {tournamentMinutes}m</span>
+      </div>
+      <button onclick={concludeTournament} class="ff-btn" title="End current season and calculate promotions/rewards">
+        End Season
+      </button>
     </div>
   </div>
 
@@ -274,6 +414,76 @@
     </div>
   </div>
 </div>
+
+{#if showPromotionModal}
+  <div class="promotion-modal-overlay">
+    <div class="promotion-modal-card">
+      <div class="modal-glow" style="background: radial-gradient(circle, {leagueTierColor}30 0%, transparent 70%);"></div>
+      
+      {#if showConfetti}
+        <div class="local-confetti-container">
+          {#each Array(60) as _, i}
+            <div 
+              class="local-confetti-particle" 
+              style="
+                --x: {Math.random() * 100}%;
+                --delay: {Math.random() * 1.2}s;
+                --color: {['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6'][i % 5]};
+                --rotation: {Math.random() * 360}deg;
+                --drift: {Math.random() * 40 - 20}%;
+              "
+            ></div>
+          {/each}
+        </div>
+      {/if}
+
+      <div class="modal-header">
+        <div class="modal-trophy-icon" style="color: {leagueTierColor};">
+          <Trophy size={48} />
+        </div>
+        <h2>Season Concluded!</h2>
+        <p class="subtitle">Weekly Tournament Results</p>
+      </div>
+
+      <div class="modal-body">
+        <div class="result-stats-grid">
+          <div class="result-stat-box">
+            <span class="stat-lbl">Final Rank</span>
+            <span class="stat-val font-mono">#{promotionResult.rank}</span>
+          </div>
+          <div class="result-stat-box">
+            <span class="stat-lbl">XP Earned</span>
+            <span class="stat-val font-mono" style="color: var(--color-primary);">+{promotionResult.rewardXp} XP</span>
+          </div>
+        </div>
+
+        <div class="league-advance-box">
+          {#if promotionResult.promoted}
+            <div class="promo-badge">PROMOTED</div>
+            <div class="league-advance">
+              <span class="old-league">{promotionResult.oldLeague}</span>
+              <span class="arrow">→</span>
+              <span class="new-league" style="color: {leagueTierColor}; font-weight: 800;">{promotionResult.newLeague}</span>
+            </div>
+            <p class="congrats-text">Congratulations! You finished in the top 3 and secured your promotion to the next league.</p>
+          {:else}
+            <div class="promo-badge non-promoted">RETAINED</div>
+            <div class="league-advance">
+              <span class="current-league">{promotionResult.oldLeague}</span>
+            </div>
+            <p class="congrats-text">Keep training! Finish in the top 3 next week to promote to the next league.</p>
+          {/if}
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button onclick={() => { showPromotionModal = false; }} class="claim-btn">
+          Claim Rewards & Continue
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .leaderboard-container {
@@ -569,5 +779,262 @@
   .small-tip {
     font-size: 10px !important;
     opacity: 0.8;
+  }
+
+  /* End Season button styled like a Cohere premium button */
+  .ff-btn {
+    background: transparent;
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ff-btn:hover {
+    background: var(--color-primary);
+    color: var(--color-canvas);
+    box-shadow: 0 0 12px var(--color-primary);
+    text-shadow: none;
+  }
+
+  /* Promotion Modal Overlay */
+  .promotion-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(9, 9, 12, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    animation: fadeIn 0.3s ease;
+  }
+
+  /* Promotion Modal Card */
+  .promotion-modal-card {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-md);
+    padding: 32px;
+    width: 90%;
+    max-width: 460px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .modal-glow {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .modal-header, .modal-body, .modal-footer {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+  }
+
+  .modal-header h2 {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 800;
+    margin: 12px 0 4px 0;
+    color: var(--color-ink);
+  }
+
+  .modal-header .subtitle {
+    font-size: 12px;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 24px 0;
+  }
+
+  .modal-trophy-icon {
+    animation: trophy-bounce 2s infinite ease-in-out;
+    filter: drop-shadow(0 0 15px currentColor);
+  }
+
+  @keyframes trophy-bounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-8px) scale(1.05); }
+  }
+
+  /* Result Stats Grid */
+  .result-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+    width: 100%;
+  }
+
+  .result-stat-box {
+    background: var(--color-tab-inactive);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .stat-lbl {
+    font-size: 10px;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .stat-val {
+    font-size: 20px;
+    font-weight: 800;
+  }
+
+  /* League Advance Box */
+  .league-advance-box {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    padding: 20px;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .promo-badge {
+    background: var(--color-primary);
+    color: var(--color-canvas);
+    font-size: 10px;
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    letter-spacing: 0.1em;
+    box-shadow: 0 0 8px var(--color-primary);
+  }
+
+  .promo-badge.non-promoted {
+    background: var(--color-muted);
+    color: var(--color-canvas);
+    box-shadow: none;
+  }
+
+  .league-advance {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .league-advance .arrow {
+    color: var(--color-muted);
+  }
+
+  .congrats-text {
+    font-size: 12px;
+    color: var(--color-muted);
+    margin: 0;
+    line-height: 1.4;
+    max-width: 320px;
+  }
+
+  /* Claim button */
+  .claim-btn {
+    background: var(--color-primary);
+    border: none;
+    color: var(--color-canvas);
+    width: 100%;
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+  }
+
+  .claim-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+  }
+
+  .claim-btn:active {
+    transform: translateY(0);
+  }
+
+  /* Animation keyframes */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes scaleIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  /* Confetti Styles locally */
+  .local-confetti-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .local-confetti-particle {
+    position: absolute;
+    top: -10px;
+    width: 6px;
+    height: 12px;
+    background: var(--color);
+    opacity: 0.8;
+    transform: rotate(var(--rotation));
+    animation: local-confetti-fall 3s var(--delay) linear forwards;
+  }
+
+  @keyframes local-confetti-fall {
+    0% {
+      top: -10px;
+      left: var(--x);
+      transform: rotate(var(--rotation)) translateY(0);
+    }
+    100% {
+      top: 100%;
+      left: calc(var(--x) + var(--drift));
+      transform: rotate(calc(var(--rotation) + 360deg)) translateY(0);
+      opacity: 0;
+    }
   }
 </style>
