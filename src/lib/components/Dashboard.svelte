@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import { 
     completedChallenges, 
     completionDates,
@@ -38,9 +39,93 @@
   let searchQuery = $state('');
   let selectedDifficulty = $state('all'); // 'all' | 'easy' | 'medium' | 'hard'
   let selectedStatus = $state('all'); // 'all' | 'completed' | 'incomplete'
+  let selectedTopic = $state('all');
+
+  // Daily quest goal progress (Item 122)
+  let dailyXpEarned = $state(0);
+  const dailyXpGoal = 50;
+
+  onMount(() => {
+    const todayStr = new Date().toDateString();
+    const lastXpDate = localStorage.getItem('dojo_last_xp_date');
+    if (lastXpDate === todayStr) {
+      dailyXpEarned = Number(localStorage.getItem('dojo_daily_xp_earned') || '0');
+    } else {
+      dailyXpEarned = 0;
+    }
+  });
+
+  // Topic Tags list based on current active language (Item 121)
+  let popularTopics = $derived.by(() => {
+    if (currentLang === 'python') {
+      return [
+        { id: 'all', label: 'All Topics' },
+        { id: 'basics', label: 'Basics' },
+        { id: 'loops', label: 'Loops & Logic' },
+        { id: 'lists', label: 'Lists & Strings' },
+        { id: 'numpy', label: 'NumPy' },
+        { id: 'pandas', label: 'Pandas' },
+        { id: 'sklearn', label: 'Scikit-Learn' }
+      ];
+    } else {
+      return [
+        { id: 'all', label: 'All Topics' },
+        { id: 'SELECT', label: 'SELECT Basics' },
+        { id: 'WHERE', label: 'Filtering (WHERE)' },
+        { id: 'joins', label: 'Joins' },
+        { id: 'subqueries', label: 'Subqueries' },
+        { id: 'ctes', label: 'CTEs' },
+        { id: 'Window Functions', label: 'Window Functions' }
+      ];
+    }
+  });
+
+  // Reset topic filter when language transitions to prevent cross-language mismatch
+  $effect(() => {
+    const lang = currentLang;
+    selectedTopic = 'all';
+  });
+
+  function matchesTopicTag(ex, topicTag) {
+    if (topicTag === 'all') return true;
+    const topic = ex.topic.toLowerCase();
+    const title = ex.title.toLowerCase();
+    
+    if (topicTag === 'basics') {
+      return topic.includes('basics') || topic.includes('operator') || topic.includes('division') || topic.includes('math');
+    }
+    if (topicTag === 'loops') {
+      return topic.includes('loop');
+    }
+    if (topicTag === 'lists') {
+      return topic.includes('list') || topic.includes('string') || topic.includes('formatting') || topic.includes('expression');
+    }
+    if (topicTag === 'numpy') {
+      return topic.includes('numpy') || topic.includes('array');
+    }
+    if (topicTag === 'pandas') {
+      return topic.includes('pandas') || topic.includes('dataframe') || topic.includes('series');
+    }
+    if (topicTag === 'sklearn') {
+      return topic.includes('sklearn') || topic.includes('regression') || topic.includes('svm') || topic.includes('knn') || topic.includes('model') || topic.includes('pca') || topic.includes('cluster');
+    }
+    if (topicTag === 'joins') {
+      return topic.includes('join');
+    }
+    if (topicTag === 'subqueries') {
+      return topic.includes('subquer') || topic.includes('exists');
+    }
+    if (topicTag === 'ctes') {
+      return topic.includes('cte');
+    }
+    
+    return topic.includes(topicTag.toLowerCase()) || title.includes(topicTag.toLowerCase());
+  }
 
   // Control Center tab state
   let activeControlTab = $state('achievements'); // 'achievements' | 'shop' | 'settings'
+
+  let unlockedList = $derived($unlockedBadges);
 
   // Badge configuration
   const allBadgesList = [
@@ -53,9 +138,6 @@
     { id: 'level-5-mastery', name: 'Level 5 Mastery', desc: 'Reach Mastery Level 5 or higher.', icon: Trophy, color: '#eab308' }
   ];
 
-  // Dummy custom components since Svelte can't pass component props directly in simple arrays,
-  // we will map badges explicitly in the HTML.
-
   // Filtered exercises computed properties
   let filteredPythonExercises = $derived(
     pythonExercises.filter(ex => {
@@ -66,7 +148,8 @@
       const matchesStatus = selectedStatus === 'all' || 
                             (selectedStatus === 'completed' && isCompleted) || 
                             (selectedStatus === 'incomplete' && !isCompleted);
-      return matchesSearch && matchesDifficulty && matchesStatus;
+      const matchesTopic = matchesTopicTag(ex, selectedTopic);
+      return matchesSearch && matchesDifficulty && matchesStatus && matchesTopic;
     })
   );
 
@@ -79,7 +162,8 @@
       const matchesStatus = selectedStatus === 'all' || 
                             (selectedStatus === 'completed' && isCompleted) || 
                             (selectedStatus === 'incomplete' && !isCompleted);
-      return matchesSearch && matchesDifficulty && matchesStatus;
+      const matchesTopic = matchesTopicTag(ex, selectedTopic);
+      return matchesSearch && matchesDifficulty && matchesStatus && matchesTopic;
     })
   );
 
@@ -364,6 +448,25 @@
         <span class="card-sub">Out of {pythonExercises.length + sqlExercises.length} total tasks</span>
       </div>
       <CheckCircle size={48} class="hero-card-icon comps-icon" />
+    </div>
+
+    <!-- Daily Quest Card (Item 122) -->
+    <div class="stat-hero-card daily-quest-card" class:goal-reached={dailyXpEarned >= dailyXpGoal}>
+      <div class="card-content">
+        <span class="card-label">Daily Quest Goal</span>
+        <span class="card-value">{dailyXpEarned} / {dailyXpGoal} XP</span>
+        <div class="quest-progress-bar-wrap">
+          <div class="quest-progress-fill" style="width: {Math.min(100, (dailyXpEarned / dailyXpGoal) * 100)}%"></div>
+        </div>
+        <span class="card-sub">
+          {#if dailyXpEarned >= dailyXpGoal}
+            🎉 Quest Completed! Target reached.
+          {:else}
+            Earn {dailyXpGoal - dailyXpEarned} more XP today!
+          {/if}
+        </span>
+      </div>
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="hero-card-icon quest-icon"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
     </div>
 
     <!-- Heatmap Card -->
@@ -664,11 +767,25 @@
       </button>
     </div>
 
+    <!-- Topic Tag Chips Bar (Item 121) -->
+    <div class="topic-tags-bar">
+      {#each popularTopics as tag}
+        {@const isSelected = selectedTopic === tag.id}
+        <button 
+          class="topic-tag-chip" 
+          class:active={isSelected}
+          onclick={() => selectedTopic = tag.id}
+        >
+          {tag.label}
+        </button>
+      {/each}
+    </div>
+
     <!-- Empty State -->
     {#if Object.keys(currentLang === 'python' ? pythonChapters : sqlChapters).length === 0}
       <div class="no-results-state">
         <p>No Dojo tasks match your active filters. Try resetting filters.</p>
-        <button class="reset-filters-btn" onclick={() => { searchQuery = ''; selectedDifficulty = 'all'; selectedStatus = 'all'; }}>
+        <button class="reset-filters-btn" onclick={() => { searchQuery = ''; selectedDifficulty = 'all'; selectedStatus = 'all'; selectedTopic = 'all'; }}>
           Reset Filters
         </button>
       </div>
@@ -770,8 +887,8 @@
   }
 
   .stat-hero-card {
-    background: #0d0d11;
-    border: 1px solid #1a1a24;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-hairline);
     border-radius: var(--radius-sm);
     padding: 24px;
     display: flex;
@@ -786,12 +903,13 @@
     flex-direction: column;
     gap: 6px;
     z-index: 2;
+    width: 100%;
   }
 
   .card-label {
     font-size: 11px;
     font-weight: 700;
-    color: #64748b;
+    color: var(--color-muted);
     text-transform: uppercase;
     letter-spacing: 0.1em;
   }
@@ -799,13 +917,13 @@
   .card-value {
     font-size: 26px;
     font-weight: 800;
-    color: #ffffff;
+    color: var(--color-ink);
     letter-spacing: -0.02em;
   }
 
   .card-sub {
     font-size: 12px;
-    color: #475569;
+    color: var(--color-muted);
   }
 
   .hero-card-icon {
@@ -817,9 +935,13 @@
     transform: scale(1.5);
   }
 
+  :global(body.theme-light) .hero-card-icon {
+    opacity: 0.08;
+  }
+
   .lvl-card {
-    border-color: rgba(234, 179, 8, 0.15);
-    background: linear-gradient(135deg, rgba(234, 179, 8, 0.03) 0%, rgba(0,0,0,0) 100%), #0d0d11;
+    border-color: rgba(234, 179, 8, 0.2);
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.04) 0%, rgba(0,0,0,0) 100%), var(--color-card-bg);
   }
 
   .lvl-card .card-value {
@@ -828,8 +950,8 @@
   }
 
   .streak-card {
-    border-color: rgba(249, 115, 22, 0.15);
-    background: linear-gradient(135deg, rgba(249, 115, 22, 0.03) 0%, rgba(0,0,0,0) 100%), #0d0d11;
+    border-color: rgba(249, 115, 22, 0.2);
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.04) 0%, rgba(0,0,0,0) 100%), var(--color-card-bg);
   }
 
   .streak-card .card-value {
@@ -838,13 +960,53 @@
   }
 
   .completions-card {
-    border-color: rgba(16, 185, 129, 0.15);
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.03) 0%, rgba(0,0,0,0) 100%), #0d0d11;
+    border-color: rgba(16, 185, 129, 0.2);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.04) 0%, rgba(0,0,0,0) 100%), var(--color-card-bg);
   }
 
   .completions-card .card-value {
     color: #10b981;
     text-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+  }
+
+  .daily-quest-card {
+    border-color: rgba(59, 130, 246, 0.2);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, rgba(0,0,0,0) 100%), var(--color-card-bg);
+  }
+
+  .daily-quest-card .card-value {
+    color: #3b82f6;
+    text-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+  }
+
+  .daily-quest-card.goal-reached {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(0,0,0,0) 100%), var(--color-card-bg);
+  }
+
+  .daily-quest-card.goal-reached .card-value {
+    color: #10b981;
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  }
+
+  .quest-progress-bar-wrap {
+    width: 100%;
+    height: 6px;
+    background: rgba(100, 116, 139, 0.12);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    margin: 4px 0 2px 0;
+  }
+
+  .quest-progress-fill {
+    height: 100%;
+    background: var(--color-primary);
+    border-radius: var(--radius-full);
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .daily-quest-card.goal-reached .quest-progress-fill {
+    background: #10b981;
   }
 
   /* Activity Heatmap Grid */
@@ -876,6 +1038,50 @@
   .heatmap-cell.active-high { background: #10b981; box-shadow: 0 0 4px #10b981; --color-glow: #10b981; }
 
   /* Syllabus Section */
+  .topic-tags-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--color-hairline);
+  }
+
+  .topic-tag-chip {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-pill);
+    padding: 5px 12px;
+    font-size: 11px;
+    font-family: var(--font-body);
+    font-weight: 500;
+    color: var(--color-muted);
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    outline: none;
+  }
+
+  .topic-tag-chip:hover {
+    color: var(--color-ink);
+    border-color: var(--color-primary);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  :global(body.theme-light) .topic-tag-chip:hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .topic-tag-chip.active {
+    color: #ffffff;
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 10px var(--color-accent-glow);
+  }
+
+  :global(body.theme-light) .topic-tag-chip.active {
+    color: #ffffff;
+  }
+
   .dojo-syllabus-header {
     display: flex;
     justify-content: space-between;

@@ -14,9 +14,15 @@
     executionTime = null
   } = $props();
 
-  let activeTab = $state('console'); // 'console' | 'table-data'
+  let activeTab = $state('console'); // 'console' | 'table-data' | 'visuals'
   let activeTablePreview = $state('');
   let consoleBodyRef = $state(null);
+
+  // Charting visuals states
+  let chartType = $state('bar'); // 'bar' | 'line' | 'area'
+  let chartXCol = $state('');
+  let chartYCol = $state('');
+  let hoveredPoint = $state(null);
 
   // Sorting & Pagination states for SQL results
   let sortColumn = $state(null);
@@ -88,11 +94,107 @@
     }
   });
 
-  // Force reset console tab if switching to python
+  // Force reset console tab if switching to python or if tab is visuals and no query results
   $effect(() => {
-    if (type === 'python' && activeTab === 'table-data') {
+    if (type === 'python' && (activeTab === 'table-data' || activeTab === 'visuals')) {
       activeTab = 'console';
     }
+  });
+
+  // Auto-initialize chart columns when query result changes
+  $effect(() => {
+    if (queryResult && queryResult.length > 0) {
+      const cols = queryResult[0].columns;
+      if (cols.length > 0) {
+        chartXCol = cols[0];
+        const vals = queryResult[0].values;
+        // Search for first numeric column (excluding first column if possible)
+        let numericColIdx = cols.findIndex((col, idx) => {
+          if (idx === 0) return false;
+          return vals.some(row => typeof row[idx] === 'number' || (!isNaN(Number(row[idx])) && row[idx] !== null));
+        });
+        if (numericColIdx !== -1) {
+          chartYCol = cols[numericColIdx];
+        } else {
+          chartYCol = cols[1] || cols[0];
+        }
+      }
+    }
+  });
+
+  // Compute chart data dynamically
+  let chartData = $derived.by(() => {
+    if (!queryResult || queryResult.length === 0 || !chartXCol || !chartYCol) return [];
+    const cols = queryResult[0].columns;
+    const xIdx = cols.indexOf(chartXCol);
+    const yIdx = cols.indexOf(chartYCol);
+    if (xIdx === -1 || yIdx === -1) return [];
+
+    return queryResult[0].values.map((row, index) => {
+      const xVal = row[xIdx] === null ? 'NULL' : String(row[xIdx]);
+      const rawY = row[yIdx];
+      const yVal = rawY === null ? 0 : (isNaN(Number(rawY)) ? 0 : Number(rawY));
+      return { x: xVal, y: yVal, index };
+    });
+  });
+
+  // SVG parameters & derived scales
+  const svgWidth = 500;
+  const svgHeight = 220;
+  const padding = { top: 15, right: 15, bottom: 40, left: 55 };
+
+  let chartScales = $derived.by(() => {
+    if (chartData.length === 0) return null;
+
+    const plotWidth = svgWidth - padding.left - padding.right;
+    const plotHeight = svgHeight - padding.top - padding.bottom;
+
+    const yValues = chartData.map(d => d.y);
+    const maxY = Math.max(1, ...yValues);
+    const minY = Math.min(0, ...yValues);
+    const yRange = maxY - minY || 1; // prevent divide-by-zero
+
+    return {
+      plotWidth,
+      plotHeight,
+      maxY,
+      minY,
+      yRange,
+      getX: (index) => {
+        if (chartData.length <= 1) return padding.left + plotWidth / 2;
+        return padding.left + (index / (chartData.length - 1)) * plotWidth;
+      },
+      getBarX: (index) => {
+        const step = plotWidth / chartData.length;
+        return padding.left + index * step + step * 0.1;
+      },
+      getBarWidth: () => {
+        const step = plotWidth / chartData.length;
+        return Math.max(4, step * 0.8);
+      },
+      getY: (value) => {
+        const pct = (value - minY) / yRange;
+        return padding.top + plotHeight - pct * plotHeight;
+      }
+    };
+  });
+
+  let linePath = $derived.by(() => {
+    if (chartData.length === 0 || !chartScales) return "";
+    return chartData.map((d, i) => {
+      const x = chartScales.getX(i);
+      const y = chartScales.getY(d.y);
+      return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+    }).join(" ");
+  });
+
+  let areaPath = $derived.by(() => {
+    if (chartData.length === 0 || !chartScales) return "";
+    const linePart = linePath;
+    const firstX = chartScales.getX(0);
+    const lastX = chartScales.getX(chartData.length - 1);
+    const zeroY = chartScales.getY(0);
+    return `${linePart} L ${lastX} ${zeroY} L ${firstX} ${zeroY} Z`;
   });
 
   // Auto-scroll console to bottom when results load
@@ -192,6 +294,17 @@
         >
           <Database size={14} class="tab-icon" />
           <span>Browse Tables</span>
+        </button>
+      {/if}
+
+      {#if type === 'sql' && queryResult && queryResult.length > 0}
+        <button 
+          class="tab-btn" 
+          class:active={activeTab === 'visuals'} 
+          onclick={() => activeTab = 'visuals'}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          <span>Visual Analytics</span>
         </button>
       {/if}
     </div>
@@ -429,6 +542,225 @@
             </div>
           {:else}
             <p class="empty-text">Table is empty or missing columns.</p>
+          {/if}
+        </div>
+      </div>
+    {:else if activeTab === 'visuals' && queryResult && queryResult.length > 0}
+      <!-- Visual Analytics Panel -->
+      <div class="visuals-panel">
+        <div class="visuals-config-bar">
+          <div class="config-item">
+            <label for="chart-type-select">Chart:</label>
+            <select id="chart-type-select" bind:value={chartType} class="config-select">
+              <option value="bar">Bar Chart</option>
+              <option value="line">Line Chart</option>
+              <option value="area">Area Chart</option>
+            </select>
+          </div>
+          <div class="config-item">
+            <label for="chart-x-select">X-Axis (Label):</label>
+            <select id="chart-x-select" bind:value={chartXCol} class="config-select">
+              {#each queryColumns as col}
+                <option value={col}>{col}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="config-item">
+            <label for="chart-y-select">Y-Axis (Value):</label>
+            <select id="chart-y-select" bind:value={chartYCol} class="config-select">
+              {#each queryColumns as col}
+                <option value={col}>{col}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          {#if chartData.length === 0}
+            <p class="empty-chart-text">No data to plot.</p>
+          {:else if chartScales}
+            <svg 
+              viewBox="0 0 {svgWidth} {svgHeight}" 
+              width="100%" 
+              height="100%" 
+              class="analytics-svg"
+            >
+              <defs>
+                <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--color-primary)" stop-opacity="0.8"/>
+                  <stop offset="100%" stop-color="var(--color-primary)" stop-opacity="0.2"/>
+                </linearGradient>
+                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--color-primary)" stop-opacity="0.3"/>
+                  <stop offset="100%" stop-color="var(--color-primary)" stop-opacity="0.0"/>
+                </linearGradient>
+              </defs>
+
+              <!-- Grid lines & Y Axis values -->
+              {#each [0, 0.25, 0.5, 0.75, 1] as tickPct}
+                {@const tickVal = chartScales.minY + tickPct * chartScales.yRange}
+                {@const y = chartScales.getY(tickVal)}
+                <line 
+                  x1={padding.left} 
+                  y1={y} 
+                  x2={svgWidth - padding.right} 
+                  y2={y} 
+                  stroke="var(--color-hairline)" 
+                  stroke-dasharray="3,3"
+                />
+                <text 
+                  x={padding.left - 8} 
+                  y={y + 4} 
+                  text-anchor="end" 
+                  class="chart-axis-text"
+                >
+                  {tickVal.toFixed(0)}
+                </text>
+              {/each}
+
+              <!-- Bottom base X Axis line -->
+              <line 
+                x1={padding.left} 
+                y1={chartScales.getY(0)} 
+                x2={svgWidth - padding.right} 
+                y2={chartScales.getY(0)} 
+                stroke="var(--color-muted)" 
+                stroke-width="1"
+              />
+
+              <!-- Render elements based on type -->
+              {#if chartType === 'bar'}
+                {#each chartData as d, i}
+                  {@const barX = chartScales.getBarX(i)}
+                  {@const barWidth = chartScales.getBarWidth()}
+                  {@const zeroY = chartScales.getY(0)}
+                  {@const barY = chartScales.getY(Math.max(0, d.y))}
+                  {@const barHeight = Math.abs(chartScales.getY(d.y) - zeroY)}
+                  <rect 
+                    x={barX} 
+                    y={barY} 
+                    width={barWidth} 
+                    height={Math.max(2, barHeight)} 
+                    fill="url(#barGrad)"
+                    stroke="var(--color-primary)"
+                    stroke-width="1"
+                    rx="2"
+                    class="chart-bar-rect"
+                    onmouseenter={(e) => {
+                      hoveredPoint = { ...d, screenX: barX + barWidth/2, screenY: barY };
+                    }}
+                    onmouseleave={() => hoveredPoint = null}
+                    role="presentation"
+                  />
+                {/each}
+              {:else if chartType === 'line'}
+                <path 
+                  d={linePath} 
+                  fill="none" 
+                  stroke="var(--color-primary)" 
+                  stroke-width="2"
+                />
+                {#each chartData as d, i}
+                  {@const ptX = chartScales.getX(i)}
+                  {@const ptY = chartScales.getY(d.y)}
+                  <circle 
+                    cx={ptX} 
+                    cy={ptY} 
+                    r="4" 
+                    fill="var(--color-card-bg)" 
+                    stroke="var(--color-primary)" 
+                    stroke-width="2" 
+                    class="chart-point-circle"
+                    onmouseenter={() => hoveredPoint = { ...d, screenX: ptX, screenY: ptY }}
+                    onmouseleave={() => hoveredPoint = null}
+                    role="presentation"
+                  />
+                {/each}
+              {:else if chartType === 'area'}
+                <path 
+                  d={areaPath} 
+                  fill="url(#areaGrad)" 
+                  stroke="none"
+                />
+                <path 
+                  d={linePath} 
+                  fill="none" 
+                  stroke="var(--color-primary)" 
+                  stroke-width="2"
+                />
+                {#each chartData as d, i}
+                  {@const ptX = chartScales.getX(i)}
+                  {@const ptY = chartScales.getY(d.y)}
+                  <circle 
+                    cx={ptX} 
+                    cy={ptY} 
+                    r="4" 
+                    fill="var(--color-card-bg)" 
+                    stroke="var(--color-primary)" 
+                    stroke-width="2" 
+                    class="chart-point-circle"
+                    onmouseenter={() => hoveredPoint = { ...d, screenX: ptX, screenY: ptY }}
+                    onmouseleave={() => hoveredPoint = null}
+                    role="presentation"
+                  />
+                {/each}
+              {/if}
+
+              <!-- X Axis Labels (Skipped/sampled if there are many labels to avoid overlap) -->
+              {#each chartData as d, i}
+                {@const isSampled = chartData.length > 8 ? i % Math.ceil(chartData.length / 6) === 0 : true}
+                {#if isSampled}
+                  {@const x = chartType === 'bar' ? chartScales.getBarX(i) + chartScales.getBarWidth() / 2 : chartScales.getX(i)}
+                  <text 
+                    x={x} 
+                    y={svgHeight - padding.bottom + 15} 
+                    text-anchor="middle" 
+                    class="chart-axis-text label-x"
+                  >
+                    {d.x.length > 10 ? d.x.substring(0, 8) + '..' : d.x}
+                  </text>
+                {/if}
+              {/each}
+
+              <!-- Hover Tooltip Overlay inside SVG -->
+              {#if hoveredPoint}
+                <g class="chart-tooltip-group">
+                  <rect 
+                    x={Math.min(svgWidth - 110, Math.max(10, hoveredPoint.screenX - 50))} 
+                    y={Math.max(5, hoveredPoint.screenY - 38)} 
+                    width="100" 
+                    height="32" 
+                    rx="4" 
+                    fill="var(--color-header-bg)" 
+                    stroke="var(--color-primary)" 
+                    stroke-width="1.5"
+                    filter="drop-shadow(0 2px 5px rgba(0,0,0,0.5))"
+                  />
+                  <text 
+                    x={Math.min(svgWidth - 60, Math.max(60, hoveredPoint.screenX))} 
+                    y={Math.max(5, hoveredPoint.screenY - 38) + 12} 
+                    text-anchor="middle" 
+                    fill="var(--color-ink)" 
+                    font-size="9"
+                    font-weight="bold"
+                    font-family="var(--font-mono)"
+                  >
+                    {hoveredPoint.x}
+                  </text>
+                  <text 
+                    x={Math.min(svgWidth - 60, Math.max(60, hoveredPoint.screenX))} 
+                    y={Math.max(5, hoveredPoint.screenY - 38) + 24} 
+                    text-anchor="middle" 
+                    fill="var(--color-primary)" 
+                    font-size="9"
+                    font-weight="bold"
+                    font-family="var(--font-mono)"
+                  >
+                    {hoveredPoint.y}
+                  </text>
+                </g>
+              {/if}
+            </svg>
           {/if}
         </div>
       </div>
@@ -955,5 +1287,116 @@
     align-items: center;
     gap: 4px;
     margin-right: 4px;
+  }
+
+  /* Visual Analytics styling */
+  .visuals-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+    animation: visuals-fadeIn 0.2s ease-out;
+  }
+
+  .visuals-config-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 10px 14px;
+    background: var(--color-tab-inactive);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+  }
+
+  .config-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .config-item label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .config-select {
+    background: var(--color-editor-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 12px;
+    padding: 3px 8px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .config-select:focus {
+    border-color: var(--color-primary);
+  }
+
+  .chart-container {
+    flex: 1;
+    min-height: 220px;
+    background: var(--color-editor-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .empty-chart-text {
+    color: var(--color-muted);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .analytics-svg {
+    max-height: 100%;
+    user-select: none;
+  }
+
+  .chart-axis-text {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    fill: var(--color-muted);
+    font-weight: 500;
+  }
+
+  .chart-bar-rect {
+    cursor: pointer;
+    transition: opacity 0.15s, stroke-width 0.15s;
+  }
+
+  .chart-bar-rect:hover {
+    opacity: 0.95;
+    stroke-width: 2px;
+  }
+
+  .chart-point-circle {
+    cursor: pointer;
+    transition: r 0.15s, stroke-width 0.15s;
+  }
+
+  .chart-point-circle:hover {
+    r: 6;
+    stroke-width: 3px;
+  }
+
+  .chart-tooltip-group {
+    pointer-events: none;
+    animation: visuals-fadeIn 0.1s ease-out;
+  }
+
+  @keyframes visuals-fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>
