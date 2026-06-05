@@ -127,6 +127,7 @@
   let pyResult = $state({ success: false, stdout: '', error: '', checksPassed: false, checksResults: [], executionTime: null, executedCode: '' });
   let sqlResult = $state({ success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [], executionTime: null, executedCode: '' });
   let showCheatSheet = $state(false);
+  let notebookInsertedSnippet = $state('');
 
   // UI state
   let activeTabLeft = $state('task'); // 'task' | 'concept' | 'cheats'
@@ -753,12 +754,13 @@
 
   // Insert code snippet at the end of the user's workspace, copying to clipboard & giving notifications
   function insertSnippet(snippet) {
+    try {
+      navigator.clipboard.writeText(snippet).catch(() => {});
+    } catch (e) {}
+
     if (workspaceMode === 'notebook') {
-      navigator.clipboard.writeText(snippet).then(() => {
-        showSystemToast("📋 Snippet copied! Paste it in your notebook cell.", "info");
-      }).catch(err => {
-        showSystemToast("📋 Copy failed, please manually highlight.", "error");
-      });
+      notebookInsertedSnippet = snippet;
+      showSystemToast("📋 Snippet inserted into active notebook cell!", "success");
     } else {
       let newCode = code;
       if (newCode.endsWith('\n') || newCode === '') {
@@ -768,12 +770,7 @@
       }
       code = newCode;
       handleCodeChange(newCode); // Update the stores!
-      
-      navigator.clipboard.writeText(snippet).then(() => {
-        showSystemToast("📋 Snippet copied and inserted into editor!", "success");
-      }).catch(err => {
-        showSystemToast("📋 Snippet inserted into editor!", "success");
-      });
+      showSystemToast("📋 Snippet inserted into editor!", "success");
     }
   }
 
@@ -1285,7 +1282,8 @@
               <Notebook 
                 challengeId={currentChallenge.id} 
                 language={activeLang} 
-                starterCode={code || currentChallenge.starterCode}
+                starterCode={currentChallenge.starterCode}
+                bind:insertedSnippet={notebookInsertedSnippet}
                 onNotebookCodeChange={applyFormattedCode}
               />
             {/if}
@@ -2058,6 +2056,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
     padding: 8px 16px;
     background: var(--color-tab-inactive);
     border: 1px solid var(--color-hairline);
@@ -2076,7 +2076,8 @@
   .editor-controls {
     display: flex;
     align-items: center;
-    gap: 16px;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
   .font-controls {
@@ -2125,17 +2126,17 @@
     background: var(--color-canvas);
     border: 1px solid var(--color-hairline);
     color: var(--color-muted);
-    padding: 5px 12px;
+    padding: 4px 10px;
     width: auto;
     height: auto;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
     border-radius: var(--radius-xs);
   }
 
