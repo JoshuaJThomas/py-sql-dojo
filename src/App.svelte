@@ -56,7 +56,8 @@
     Flame,
     BookOpen,
     GraduationCap,
-    FileText
+    FileText,
+    ListTodo
   } from 'lucide-svelte';
 
   // State
@@ -547,6 +548,150 @@
     }
   }
 
+  // Auto-evaluation of task steps based on active code content
+  function checkStepCompletion(step, currentCode) {
+    if (!currentCode) return false;
+    const normalizedCode = currentCode.replace(/\s+/g, ' ').trim().toLowerCase();
+    
+    // Check based on step titles and content
+    if (step.title.includes("Function Signature") || step.title.includes("Define the Function")) {
+      return currentCode.includes("def ") && currentCode.includes(":");
+    }
+    if (step.title.includes("Return the Output") || step.title.includes("Ensure the function returns")) {
+      return currentCode.includes("return ");
+    }
+    if (step.title.includes("result") || step.title.includes("Assign")) {
+      return currentCode.includes("result =") || currentCode.includes("result=");
+    }
+    if (step.title.includes("Select Projection") || step.title.includes("SELECT")) {
+      return normalizedCode.includes("select ");
+    }
+    if (step.title.includes("Join") || step.title.includes("JOIN")) {
+      return normalizedCode.includes("join ");
+    }
+    if (step.title.includes("Filter Row") || step.title.includes("WHERE")) {
+      return normalizedCode.includes("where ");
+    }
+    if (step.title.includes("Aggregate") || step.title.includes("GROUP BY")) {
+      return normalizedCode.includes("group by ");
+    }
+    if (step.title.includes("Sort") || step.title.includes("ORDER BY")) {
+      return normalizedCode.includes("order by ");
+    }
+    if (step.title.includes("Terminate") || step.title.includes(";")) {
+      return normalizedCode.includes(";");
+    }
+    
+    // Default fallback check
+    return false;
+  }
+
+  // Generate learning step-by-step breakdown chunks dynamically for any Python/SQL task
+  function getChallengeSteps(challenge) {
+    if (!challenge) return [];
+    if (challenge.steps && challenge.steps.length > 0) {
+      return challenge.steps;
+    }
+    
+    const steps = [];
+    const prompt = challenge.prompt || "";
+    const isPython = !challenge.id.startsWith('sql-');
+    
+    if (isPython) {
+      if (prompt.toLowerCase().includes("function")) {
+        steps.push({
+          id: 1,
+          title: "1. Define the Function Signature",
+          desc: "Declare the function using the `def` keyword with the correct parameters and a colon.",
+          code: challenge.starterCode.split('\n')[0] || "def function_name(params):"
+        });
+        steps.push({
+          id: 2,
+          title: "2. Implement Core Logic",
+          desc: "Write calculations or operations inside the function block to compute results.",
+          code: challenge.solution ? "# Implement logic here" : ""
+        });
+        steps.push({
+          id: 3,
+          title: "3. Return the Output",
+          desc: "Make sure the function returns the correct evaluation using the `return` statement.",
+          code: "return output_val"
+        });
+        steps.push({
+          id: 4,
+          title: "4. Assign Reference to result",
+          desc: "Point the variable `result` to your function name so the tests can call it.",
+          code: "result = " + (challenge.starterCode.match(/result\s*=\s*([a-zA-Z0-9_]+)/)?.[1] || "function_name")
+        });
+      } else {
+        steps.push({
+          id: 1,
+          title: "1. Inspect Scope Variables",
+          desc: "Observe variables preloaded in the prelude (like dictionary input or list values).",
+          code: challenge.prelude || "# Review variables in prompt"
+        });
+        steps.push({
+          id: 2,
+          title: "2. Perform Logic / Arithmetic",
+          desc: "Apply operators, array operations, or lists functions to calculate the solution.",
+          code: "# Perform calculation"
+        });
+        steps.push({
+          id: 3,
+          title: "3. Assign Output to result",
+          desc: "Bind the computed value directly to the variable named `result`.",
+          code: "result = ..."
+        });
+      }
+    } else {
+      steps.push({
+        id: 1,
+        title: "1. Define Select Columns",
+        desc: "Build the query base select projection specifying column names or aggregations.",
+        code: "SELECT columns"
+      });
+      if (prompt.toLowerCase().includes("join")) {
+        steps.push({
+          id: 2,
+          title: "2. Join Relational Tables",
+          desc: "Specify JOIN relationships using tables and column keys (primary & foreign).",
+          code: "FROM t1 JOIN t2 ON t1.id = t2.t1_id"
+        });
+      }
+      if (prompt.toLowerCase().includes("where") || prompt.toLowerCase().includes("filter") || prompt.toLowerCase().includes(">") || prompt.toLowerCase().includes("salary")) {
+        steps.push({
+          id: steps.length + 1,
+          title: `${steps.length + 1}. Filter Rows (WHERE)`,
+          desc: "Introduce a WHERE clause to filter entries based on parameters.",
+          code: "WHERE filter_condition"
+        });
+      }
+      if (prompt.toLowerCase().includes("group by") || prompt.toLowerCase().includes("count") || prompt.toLowerCase().includes("average")) {
+        steps.push({
+          id: steps.length + 1,
+          title: `${steps.length + 1}. Partition & Aggregate (GROUP BY)`,
+          desc: "Add a GROUP BY block, using summary functions (AVG, COUNT, SUM).",
+          code: "GROUP BY grouping_column"
+        });
+      }
+      if (prompt.toLowerCase().includes("order by") || prompt.toLowerCase().includes("sort") || prompt.toLowerCase().includes("highest")) {
+        steps.push({
+          id: steps.length + 1,
+          title: `${steps.length + 1}. Sort Result Rows (ORDER BY)`,
+          desc: "Sort column rows ascending or descending, filtering counts.",
+          code: "ORDER BY col DESC"
+        });
+      }
+      steps.push({
+        id: steps.length + 1,
+        title: `${steps.length + 1}. Terminate Query`,
+        desc: "Close the query block with a semicolon.",
+        code: ";"
+      });
+    }
+    return steps;
+  }
+
   // Insert code snippet at the end of the user's workspace, copying to clipboard & giving notifications
   function insertSnippet(snippet) {
     if (workspaceMode === 'notebook') {
@@ -678,6 +823,15 @@
                 </button>
                 <button 
                   class="left-tab-btn" 
+                  class:active={activeTabLeft === 'breakdown'} 
+                  onclick={() => activeTabLeft = 'breakdown'}
+                  title="View step-by-step task breakdown"
+                >
+                  <ListTodo size={11} />
+                  <span>Breakdown</span>
+                </button>
+                <button 
+                  class="left-tab-btn" 
                   class:active={activeTabLeft === 'concept'} 
                   onclick={() => activeTabLeft = 'concept'}
                   title="View concept explanation"
@@ -749,145 +903,181 @@
                     {/if}
                   </div>
                 {/if}
-              {:else}
-                <!-- Concept breakdown / guide -->
-                {#if activeTabLeft === 'concept'}
-                  {@const breakdown = getConceptBreakdown(currentChallenge.topic, currentChallenge.id)}
-                  <div class="concept-breakdown-wrapper">
-                    <div class="concept-header-pill">
-                      <GraduationCap size={12} style="margin-right: 4px;" />
-                      <span>{currentChallenge.topic.toUpperCase()}</span>
-                    </div>
-                    <h3 class="concept-title">{breakdown.title}</h3>
-                    <p class="concept-desc">{breakdown.desc}</p>
-                    
-                    {#if breakdown.diagram}
-                      <div class="concept-diagram-container">
-                        <div class="diagram-header-tag">VISUAL BLOCK FLOW</div>
-                        <pre class="concept-diagram"><code>{breakdown.diagram}</code></pre>
-                      </div>
-                    {/if}
-                    
-                    <div class="concept-keypoints-box">
-                      <div class="keypoints-header-tag">KEY TAKEAWAYS</div>
-                      <ul class="concept-keypoints">
-                        {#each breakdown.keyPoints as pt}
-                          <li>{pt}</li>
-                        {/each}
-                      </ul>
-                    </div>
+              {:else if activeTabLeft === 'breakdown'}
+                {@const steps = getChallengeSteps(currentChallenge)}
+                <div class="steps-breakdown-wrapper">
+                  <div class="concept-header-pill" style="border-color: var(--color-primary); color: var(--color-primary); background: var(--color-accent-glow);">
+                    <ListTodo size={12} style="margin-right: 4px;" />
+                    <span>STEP-BY-STEP LEARNING</span>
+                  </div>
+                  <h3 class="concept-title">Task Breakdown</h3>
+                  <p class="concept-desc" style="margin-bottom: 12px;">
+                    We've divided this task into smaller chunks to help you build the solution incrementally. Review each step below:
+                  </p>
 
-                    {#if breakdown.example}
-                      <div class="concept-example-box">
-                        <div class="example-header-tag">SYNTAX EXAMPLE</div>
-                        <pre class="concept-example-code"><code>{breakdown.example}</code></pre>
-                        <button class="concept-use-btn" onclick={() => insertSnippet(breakdown.example + '\n')} title="Insert this code example into editor">
-                          Insert into Editor
-                        </button>
-                      </div>
-                    {/if}
-
-                    <!-- Interactive Concept Check Quiz -->
-                    {#if breakdown.quiz}
-                      <div class="concept-quiz-card" class:completed={completedQuizzes.includes(currentChallenge.topic)}>
-                        <div class="quiz-header">
-                          <span class="quiz-title-tag">💡 CONCEPT CHECK</span>
-                          {#if completedQuizzes.includes(currentChallenge.topic)}
-                            <span class="quiz-badge success">✓ COMPLETED (+10 XP)</span>
-                          {:else}
-                            <span class="quiz-badge reward">+10 XP REWARD</span>
-                          {/if}
+                  <div class="steps-list">
+                    {#each steps as step, idx}
+                      {@const isStepDone = checkStepCompletion(step, code)}
+                      <div class="step-card" class:completed={isStepDone}>
+                        <div class="step-card-header">
+                          <span class="step-card-title">{step.title}</span>
+                          <span class="step-status-badge" class:completed={isStepDone}>
+                            {isStepDone ? '✓ Completed' : 'Pending'}
+                          </span>
                         </div>
-                        <p class="quiz-question">{breakdown.quiz.question}</p>
-                        
-                        <div class="quiz-options">
-                          {#each breakdown.quiz.options as opt, idx}
+                        <p class="step-card-desc">{step.desc}</p>
+                        {#if step.code}
+                          <div class="step-code-box">
+                            <pre class="step-code"><code>{step.code}</code></pre>
                             <button 
-                              class="quiz-option-btn"
-                              class:selected={selectedOption === idx}
-                              class:correct={quizAnswered && idx === breakdown.quiz.answer}
-                              class:wrong={quizAnswered && selectedOption === idx && idx !== breakdown.quiz.answer}
-                              disabled={quizAnswered}
-                              onclick={() => submitQuizAnswer(idx, breakdown.quiz.answer, currentChallenge.topic)}
+                              class="step-use-btn" 
+                              onclick={() => insertSnippet(step.code + '\n')} 
+                              title="Insert helper code at cursor"
                             >
-                              <span class="option-letter">{['A', 'B', 'C', 'D'][idx]}</span>
-                              <span class="option-text">{opt}</span>
+                              Insert Snippet
                             </button>
-                          {/each}
-                        </div>
-
-                        {#if quizAnswered}
-                          <div class="quiz-explanation-box" class:correct={quizCorrect}>
-                            <p class="explanation-status">
-                              {quizCorrect ? '🎉 Correct!' : '❌ Incorrect'}
-                            </p>
-                            <p class="explanation-text">{breakdown.quiz.explanation}</p>
                           </div>
                         {/if}
                       </div>
-                    {/if}
+                    {/each}
                   </div>
-                {:else}
-                  <!-- Cheatsheet Section -->
-                  <div class="snippets-grid-tab">
-                    <p style="font-size: 11px; color: var(--color-muted); margin-bottom: 12px; line-height: 1.4;">
-                      Click any helper syntax snippet block below to insert it at your cursor in the editor workspace.
-                    </p>
-                    <div class="snippets-grid-compact">
-                      {#if activeLang === 'python'}
-                        <button class="snippet-item" onclick={() => insertSnippet('import numpy as np\n')}>
-                          <code>import numpy as np</code>
-                          <span>Import NumPy</span>
-                        </button>
-                        <button class="snippet-item" onclick={() => insertSnippet('import pandas as pd\n')}>
-                          <code>import pandas as pd</code>
-                          <span>Import Pandas</span>
-                        </button>
-                        <button class="snippet-item" onclick={() => insertSnippet('for i in range(10):\n    print(i)\n')}>
-                          <code>for i in range(10)</code>
-                          <span>For Loop</span>
-                        </button>
-                        <button class="snippet-item" onclick={() => insertSnippet('[x for x in items if x > 0]')}>
-                          <code>[x for x in list]</code>
-                          <span>List Comprehension</span>
-                        </button>
-                        <button class="snippet-item" onclick={() => insertSnippet('np.mean(arr)')}>
-                          <code>np.mean(arr)</code>
-                          <span>Mean calculation</span>
-                        </button>
-                        <button class="snippet-item" onclick={() => insertSnippet('df.groupby(\'col\').mean()')}>
-                          <code>df.groupby()</code>
-                          <span>Pandas GroupBy</span>
-                        </button>
-                      {:else}
-                        <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table;\n')}>
-                          <code>SELECT * FROM...</code>
-                          <span>Select All</span>
-                        </button>
-                        <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table\nWHERE condition;\n')}>
-                          <code>WHERE ...</code>
-                          <span>Filter rows</span>
-                        </button>
-                        <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM t1\nJOIN t2 ON t1.id = t2.t1_id;\n')}>
-                          <code>INNER JOIN ...</code>
-                          <span>Join tables</span>
-                        </button>
-                        <button class="snippet-item" onclick={() => insertSnippet('SELECT col, COUNT(*)\nFROM table\nGROUP BY col;\n')}>
-                          <code>GROUP BY ...</code>
-                          <span>Aggregation</span>
-                        </button>
-                        <button class="snippet-item" onclick={() => insertSnippet('SELECT col, ROW_NUMBER() OVER (PARTITION BY col2 ORDER BY col3) as rnk\nFROM table;\n')}>
-                          <code>ROW_NUMBER() OVER...</code>
-                          <span>Window Function</span>
-                        </button>
-                        <button class="snippet-item" onclick={() => insertSnippet('WITH cte AS (\n  SELECT * FROM table\n)\nSELECT * FROM cte;\n')}>
-                          <code>WITH cte AS (...)</code>
-                          <span>Common Table Exp.</span>
-                        </button>
+                </div>
+              {:else if activeTabLeft === 'concept'}
+                {@const breakdown = getConceptBreakdown(currentChallenge.topic, currentChallenge.id)}
+                <div class="concept-breakdown-wrapper">
+                  <div class="concept-header-pill">
+                    <GraduationCap size={12} style="margin-right: 4px;" />
+                    <span>{currentChallenge.topic.toUpperCase()}</span>
+                  </div>
+                  <h3 class="concept-title">{breakdown.title}</h3>
+                  <p class="concept-desc">{breakdown.desc}</p>
+                  
+                  {#if breakdown.diagram}
+                    <div class="concept-diagram-container">
+                      <div class="diagram-header-tag">VISUAL BLOCK FLOW</div>
+                      <pre class="concept-diagram"><code>{breakdown.diagram}</code></pre>
+                    </div>
+                  {/if}
+                  
+                  <div class="concept-keypoints-box">
+                    <div class="keypoints-header-tag">KEY TAKEAWAYS</div>
+                    <ul class="concept-keypoints">
+                      {#each breakdown.keyPoints as pt}
+                        <li>{pt}</li>
+                      {/each}
+                    </ul>
+                  </div>
+
+                  {#if breakdown.example}
+                    <div class="concept-example-box">
+                      <div class="example-header-tag">SYNTAX EXAMPLE</div>
+                      <pre class="concept-example-code"><code>{breakdown.example}</code></pre>
+                      <button class="concept-use-btn" onclick={() => insertSnippet(breakdown.example + '\n')} title="Insert this code example into editor">
+                        Insert into Editor
+                      </button>
+                    </div>
+                  {/if}
+
+                  <!-- Interactive Concept Check Quiz -->
+                  {#if breakdown.quiz}
+                    <div class="concept-quiz-card" class:completed={completedQuizzes.includes(currentChallenge.topic)}>
+                      <div class="quiz-header">
+                        <span class="quiz-title-tag">💡 CONCEPT CHECK</span>
+                        {#if completedQuizzes.includes(currentChallenge.topic)}
+                          <span class="quiz-badge success">✓ COMPLETED (+10 XP)</span>
+                        {:else}
+                          <span class="quiz-badge reward">+10 XP REWARD</span>
+                        {/if}
+                      </div>
+                      <p class="quiz-question">{breakdown.quiz.question}</p>
+                      
+                      <div class="quiz-options">
+                        {#each breakdown.quiz.options as opt, idx}
+                          <button 
+                            class="quiz-option-btn"
+                            class:selected={selectedOption === idx}
+                            class:correct={quizAnswered && idx === breakdown.quiz.answer}
+                            class:wrong={quizAnswered && selectedOption === idx && idx !== breakdown.quiz.answer}
+                            disabled={quizAnswered}
+                            onclick={() => submitQuizAnswer(idx, breakdown.quiz.answer, currentChallenge.topic)}
+                          >
+                            <span class="option-letter">{['A', 'B', 'C', 'D'][idx]}</span>
+                            <span class="option-text">{opt}</span>
+                          </button>
+                        {/each}
+                      </div>
+
+                      {#if quizAnswered}
+                        <div class="quiz-explanation-box" class:correct={quizCorrect}>
+                          <p class="explanation-status">
+                            {quizCorrect ? '🎉 Correct!' : '❌ Incorrect'}
+                          </p>
+                          <p class="explanation-text">{breakdown.quiz.explanation}</p>
+                        </div>
                       {/if}
                     </div>
+                  {/if}
+                </div>
+              {:else if activeTabLeft === 'cheats'}
+                <!-- Cheatsheet Section -->
+                <div class="snippets-grid-tab">
+                  <p style="font-size: 11px; color: var(--color-muted); margin-bottom: 12px; line-height: 1.4;">
+                    Click any helper syntax snippet block below to insert it at your cursor in the editor workspace.
+                  </p>
+                  <div class="snippets-grid-compact">
+                    {#if activeLang === 'python'}
+                      <button class="snippet-item" onclick={() => insertSnippet('import numpy as np\n')}>
+                        <code>import numpy as np</code>
+                        <span>Import NumPy</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('import pandas as pd\n')}>
+                        <code>import pandas as pd</code>
+                        <span>Import Pandas</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('for i in range(10):\n    print(i)\n')}>
+                        <code>for i in range(10)</code>
+                        <span>For Loop</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('[x for x in items if x > 0]')}>
+                        <code>[x for x in list]</code>
+                        <span>List Comprehension</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('np.mean(arr)')}>
+                        <code>np.mean(arr)</code>
+                        <span>Mean calculation</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('df.groupby(\'col\').mean()')}>
+                        <code>df.groupby()</code>
+                        <span>Pandas GroupBy</span>
+                      </button>
+                    {:else}
+                      <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table;\n')}>
+                        <code>SELECT * FROM...</code>
+                        <span>Select All</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table\nWHERE condition;\n')}>
+                        <code>WHERE ...</code>
+                        <span>Filter rows</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM t1\nJOIN t2 ON t1.id = t2.t1_id;\n')}>
+                        <code>INNER JOIN ...</code>
+                        <span>Join tables</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('SELECT col, COUNT(*)\nFROM table\nGROUP BY col;\n')}>
+                        <code>GROUP BY ...</code>
+                        <span>Aggregation</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('SELECT col, ROW_NUMBER() OVER (PARTITION BY col2 ORDER BY col3) as rnk\nFROM table;\n')}>
+                        <code>ROW_NUMBER() OVER...</code>
+                        <span>Window Function</span>
+                      </button>
+                      <button class="snippet-item" onclick={() => insertSnippet('WITH cte AS (\n  SELECT * FROM table\n)\nSELECT * FROM cte;\n')}>
+                        <code>WITH cte AS (...)</code>
+                        <span>Common Table Exp.</span>
+                      </button>
+                    {/if}
                   </div>
-                {/if}
+                </div>
               {/if}
 
               <!-- Sandbox Control Panels -->
@@ -2418,6 +2608,110 @@
   .drawer-body-wrap {
     flex: 1;
     overflow: hidden;
+  }
+
+  /* Steps Breakdown View CSS */
+  .steps-breakdown-wrapper {
+    display: flex;
+    flex-direction: column;
+    color: var(--color-ink);
+  }
+
+  .steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .step-card {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    transition: all 0.25s ease;
+  }
+
+  .step-card.completed {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.02);
+  }
+
+  .step-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .step-card-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-ink);
+  }
+
+  .step-status-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--color-canvas);
+    border: 1px solid var(--color-hairline);
+    color: var(--color-muted);
+  }
+
+  .step-status-badge.completed {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+
+  .step-card-desc {
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--color-muted);
+    margin: 0 0 8px 0;
+  }
+
+  .step-code-box {
+    margin-top: 8px;
+    background: var(--color-canvas);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .step-code {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-primary);
+    overflow-x: auto;
+  }
+
+  .step-use-btn {
+    align-self: flex-end;
+    background: var(--color-accent-glow);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    font-family: var(--font-body);
+    font-size: 8.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 3px 8px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .step-use-btn:hover {
+    background: var(--color-primary);
+    color: var(--color-canvas);
   }
 
   /* Concept Check Quiz CSS */

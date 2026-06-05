@@ -5,9 +5,67 @@
   import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
   import { python } from '@codemirror/lang-python';
   import { sql } from '@codemirror/lang-sql';
+  import { autocompletion } from '@codemirror/autocomplete';
   import { theme } from '../stores/dojo-store.js';
 
   let { value = $bindable(), language = 'python', onChange = null, fontSize = 14, wordWrap = true } = $props();
+
+  // Custom Dojo autocompletions for Python and SQL
+  const customPythonCompletions = [
+    { label: 'def', type: 'keyword', detail: 'Define function' },
+    { label: 'return', type: 'keyword', detail: 'Return statement' },
+    { label: 'import numpy as np', type: 'keyword', detail: 'Import NumPy library' },
+    { label: 'import pandas as pd', type: 'keyword', detail: 'Import Pandas library' },
+    { label: 'np.array', type: 'function', detail: 'NumPy array creation' },
+    { label: 'np.mean', type: 'function', detail: 'Calculate mean average' },
+    { label: 'np.median', type: 'function', detail: 'Calculate median' },
+    { label: 'pd.DataFrame', type: 'class', detail: 'Pandas DataFrame constructor' },
+    { label: 'df.groupby', type: 'method', detail: 'Group DataFrame records' },
+    { label: 'df.loc', type: 'property', detail: 'Label-based slicing' },
+    { label: 'df.iloc', type: 'property', detail: 'Integer-based indexing' },
+    { label: 'fizzbuzz', type: 'function', detail: 'FizzBuzz function' },
+    { label: 'is_leap', type: 'function', detail: 'Leap year checker' },
+    { label: 'result', type: 'variable', detail: 'Output target variable' },
+    { label: 'scores', type: 'variable', detail: 'List of score integers' },
+    { label: 'runner_up', type: 'variable', detail: 'Second highest score' },
+    { label: 'print', type: 'function', detail: 'Print output to console' }
+  ];
+
+  const customSqlCompletions = [
+    { label: 'SELECT', type: 'keyword', detail: 'Query selection projection' },
+    { label: 'FROM', type: 'keyword', detail: 'Target table source' },
+    { label: 'WHERE', type: 'keyword', detail: 'Row filtering condition' },
+    { label: 'INNER JOIN', type: 'keyword', detail: 'Combine matching records' },
+    { label: 'LEFT JOIN', type: 'keyword', detail: 'Combine with unmatched left rows' },
+    { label: 'GROUP BY', type: 'keyword', detail: 'Partition results into aggregates' },
+    { label: 'ORDER BY', type: 'keyword', detail: 'Sort returned rows' },
+    { label: 'employees', type: 'keyword', detail: 'Employees Table' },
+    { label: 'departments', type: 'keyword', detail: 'Departments Table' },
+    { label: 'orders', type: 'keyword', detail: 'Orders Table' },
+    { label: 'customers', type: 'keyword', detail: 'Customers Table' },
+    { label: 'salary', type: 'property', detail: 'Salary Column' },
+    { label: 'department', type: 'property', detail: 'Department Column' },
+    { label: 'ROW_NUMBER() OVER', type: 'function', detail: 'Window Row Number' },
+    { label: 'RANK() OVER', type: 'function', detail: 'Window Rank' }
+  ];
+
+  function getDojoCompletions(lang) {
+    return (context) => {
+      let word = context.matchBefore(/\w+/);
+      if (!word || (word.from === word.to && !context.explicit)) return null;
+      
+      const list = lang === 'python' ? customPythonCompletions : customSqlCompletions;
+      const text = word.text.toLowerCase();
+      const options = list.filter(opt => opt.label.toLowerCase().includes(text));
+      
+      if (options.length === 0) return null;
+      
+      return {
+        from: word.from,
+        options: options
+      };
+    };
+  }
 
   let containerEl;
   let view;
@@ -71,6 +129,7 @@
         drawSelection(),
         getLanguageExtension(lang),
         createDojoTheme(isLight),
+        autocompletion({ override: [getDojoCompletions(lang)] }),
         EditorView.theme({
           "&": {
             fontSize: `${size}px !important`
@@ -138,5 +197,50 @@
   
   :global(.cm-editor) {
     height: 100%;
+  }
+
+  /* Premium Autocomplete Tooltip Styles */
+  :global(.cm-tooltip-autocomplete) {
+    background-color: var(--color-canvas) !important;
+    border: 1px solid var(--color-hairline) !important;
+    border-radius: var(--radius-sm) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+    font-family: var(--font-mono) !important;
+    font-size: 11px !important;
+    padding: 4px 0 !important;
+    max-height: 200px !important;
+  }
+
+  :global(.cm-tooltip-autocomplete ul) {
+    max-height: 200px !important;
+  }
+
+  :global(.cm-tooltip-autocomplete ul li) {
+    padding: 6px 12px !important;
+    color: var(--color-muted) !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 16px !important;
+  }
+
+  :global(.cm-tooltip-autocomplete ul li[aria-selected]) {
+    background-color: var(--color-accent-glow) !important;
+    color: var(--color-primary) !important;
+  }
+
+  :global(.cm-completionInfo) {
+    background-color: var(--color-canvas) !important;
+    border: 1px solid var(--color-hairline) !important;
+    color: var(--color-ink) !important;
+    padding: 8px !important;
+  }
+
+  /* Completion details/types styles */
+  :global(.cm-completionDetail) {
+    font-style: italic !important;
+    font-size: 9px !important;
+    color: var(--color-muted) !important;
+    opacity: 0.8 !important;
   }
 </style>
