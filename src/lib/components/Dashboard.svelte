@@ -16,10 +16,17 @@
     userPythonCode,
     userSqlCode,
     generateSignature,
-    updateSignature
+    updateSignature,
+    starredChallenges
   } from '../stores/dojo-store.js';
   import { pythonExercises } from '../data/python-exercises.js';
   import { sqlExercises } from '../data/sql-exercises.js';
+  
+  // Subcomponents
+  import Analytics from './Analytics.svelte';
+  import DojoForge from './DojoForge.svelte';
+  import Leaderboard from './Leaderboard.svelte';
+
   import { 
     Trophy, Flame, CheckCircle, Circle, Play, BookOpen, Star, 
     Shield, Zap, Settings, Download, Upload, Volume2, VolumeX, 
@@ -30,10 +37,15 @@
 
   let currentLang = $derived($language);
   let completedList = $derived($completedChallenges);
+  let starredList = $derived($starredChallenges || []);
   let currentXp = $derived($xp);
   let currentLevel = $derived($level);
   let currentStreak = $derived($streak);
   let datesMap = $derived($completionDates || {});
+  let activeInventory = $derived($inventory);
+
+  // Custom challenges list
+  let customList = $state([]);
 
   // Searching & Filtering States
   let searchQuery = $state('');
@@ -53,7 +65,27 @@
     } else {
       dailyXpEarned = 0;
     }
+    refreshCustomChallenges();
   });
+
+  function refreshCustomChallenges() {
+    const saved = localStorage.getItem('dojo_custom_challenges') || '[]';
+    try {
+      customList = JSON.parse(saved);
+    } catch (e) {
+      customList = [];
+    }
+  }
+
+  function toggleStar(cId) {
+    starredChallenges.update(list => {
+      if (list.includes(cId)) {
+        return list.filter(id => id !== cId);
+      } else {
+        return [...list, cId];
+      }
+    });
+  }
 
   // Topic Tags list based on current active language (Item 121)
   let popularTopics = $derived.by(() => {
@@ -140,28 +172,30 @@
 
   // Filtered exercises computed properties
   let filteredPythonExercises = $derived(
-    pythonExercises.filter(ex => {
+    [...pythonExercises, ...customList.filter(c => c.language === 'python')].filter(ex => {
       const matchesSearch = ex.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             ex.topic.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesDifficulty = selectedDifficulty === 'all' || ex.difficulty === selectedDifficulty;
       const isCompleted = completedList.includes(ex.id);
       const matchesStatus = selectedStatus === 'all' || 
                             (selectedStatus === 'completed' && isCompleted) || 
-                            (selectedStatus === 'incomplete' && !isCompleted);
+                            (selectedStatus === 'incomplete' && !isCompleted) ||
+                            (selectedStatus === 'starred' && starredList.includes(ex.id));
       const matchesTopic = matchesTopicTag(ex, selectedTopic);
       return matchesSearch && matchesDifficulty && matchesStatus && matchesTopic;
     })
   );
 
   let filteredSqlExercises = $derived(
-    sqlExercises.filter(ex => {
+    [...sqlExercises, ...customList.filter(c => c.language === 'sql')].filter(ex => {
       const matchesSearch = ex.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             ex.topic.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesDifficulty = selectedDifficulty === 'all' || ex.difficulty === selectedDifficulty;
       const isCompleted = completedList.includes(ex.id);
       const matchesStatus = selectedStatus === 'all' || 
                             (selectedStatus === 'completed' && isCompleted) || 
-                            (selectedStatus === 'incomplete' && !isCompleted);
+                            (selectedStatus === 'incomplete' && !isCompleted) ||
+                            (selectedStatus === 'starred' && starredList.includes(ex.id));
       const matchesTopic = matchesTopicTag(ex, selectedTopic);
       return matchesSearch && matchesDifficulty && matchesStatus && matchesTopic;
     })
@@ -507,6 +541,30 @@
       </button>
       <button 
         class="control-tab-btn" 
+        class:active={activeControlTab === 'analytics'} 
+        onclick={() => activeControlTab = 'analytics'}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-ic"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <span>Analytics</span>
+      </button>
+      <button 
+        class="control-tab-btn" 
+        class:active={activeControlTab === 'leaderboard'} 
+        onclick={() => activeControlTab = 'leaderboard'}
+      >
+        <Trophy size={14} class="tab-ic" />
+        <span>Leaderboard</span>
+      </button>
+      <button 
+        class="control-tab-btn" 
+        class:active={activeControlTab === 'forge'} 
+        onclick={() => activeControlTab = 'forge'}
+      >
+        <Code size={14} class="tab-ic" />
+        <span>Dojo Forge</span>
+      </button>
+      <button 
+        class="control-tab-btn" 
         class:active={activeControlTab === 'settings'} 
         onclick={() => activeControlTab = 'settings'}
       >
@@ -718,6 +776,12 @@
             </div>
           </div>
         </div>
+      {:else if activeControlTab === 'analytics'}
+        <Analytics />
+      {:else if activeControlTab === 'leaderboard'}
+        <Leaderboard />
+      {:else if activeControlTab === 'forge'}
+        <DojoForge language={currentLang} onChallengeCreated={refreshCustomChallenges} />
       {/if}
     </div>
   </div>
@@ -758,6 +822,7 @@
           <option value="all">All Statuses</option>
           <option value="completed">Completed Only</option>
           <option value="incomplete">Incomplete Only</option>
+          <option value="starred">⭐ Starred Only</option>
         </select>
       </div>
 
@@ -811,11 +876,24 @@
                       <Circle size={16} class="status-empty" />
                     {/if}
                     <div class="task-info">
-                      <span class="task-title">{task.title}</span>
+                      <span class="task-title">
+                        {task.title}
+                        {#if task.isCustom}
+                          <span class="custom-badge" title="Forged challenge">Custom</span>
+                        {/if}
+                      </span>
                       <span class="task-topic">{task.topic}</span>
                     </div>
                   </div>
                   <div class="task-actions">
+                    <button 
+                      class="star-toggle-btn" 
+                      class:starred={starredList.includes(task.id)}
+                      onclick={() => toggleStar(task.id)}
+                      title="Bookmark exercise"
+                    >
+                      <Star size={13} fill={starredList.includes(task.id) ? "currentColor" : "none"} />
+                    </button>
                     <span class="diff-tag {task.difficulty}">{task.difficulty}</span>
                     <button class="play-btn" onclick={() => startChallenge(task.id, 'python')}>
                       <Play size={12} fill="currentColor" />
@@ -848,11 +926,24 @@
                       <Circle size={16} class="status-empty" />
                     {/if}
                     <div class="task-info">
-                      <span class="task-title">{task.title}</span>
+                      <span class="task-title">
+                        {task.title}
+                        {#if task.isCustom}
+                          <span class="custom-badge" title="Forged challenge">Custom</span>
+                        {/if}
+                      </span>
                       <span class="task-topic">{task.topic}</span>
                     </div>
                   </div>
                   <div class="task-actions">
+                    <button 
+                      class="star-toggle-btn" 
+                      class:starred={starredList.includes(task.id)}
+                      onclick={() => toggleStar(task.id)}
+                      title="Bookmark exercise"
+                    >
+                      <Star size={13} fill={starredList.includes(task.id) ? "currentColor" : "none"} />
+                    </button>
                     <span class="diff-tag {task.difficulty}">{task.difficulty}</span>
                     <button class="play-btn" onclick={() => startChallenge(task.id, 'sql')}>
                       <Play size={12} fill="currentColor" />

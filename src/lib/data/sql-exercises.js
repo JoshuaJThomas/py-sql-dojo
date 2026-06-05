@@ -752,6 +752,161 @@ export const sqlExercises = [
     hint: "Use DENSE_RANK() OVER (ORDER BY salary DESC) AS salary_rank.",
     solution: "SELECT name, salary, DENSE_RANK() OVER (ORDER BY salary DESC) AS salary_rank FROM employees;",
     difficulty: "hard"
+  },
+  {
+    id: "sql-coalesce-null-date-41",
+    chapter: 10,
+    topic: "NULL Handling",
+    title: "Coalesce Null Hire Dates",
+    prompt: "Check employee names and hire dates. If hire_date is NULL (none are NULL in our seeds, but we check for robust queries), replace it with 'Not Defined' and name the column `hired_on`.",
+    starterCode: "-- Coalesce hire_date\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns.includes('hired_on'), msg: "Result column must be named 'hired_on'" },
+      { rule: (result) => result && result[0].values.length === 7, msg: "Must return all 7 employees" }
+    ],
+    hint: "Use COALESCE(hire_date, 'Not Defined') AS hired_on.",
+    solution: "SELECT name, COALESCE(hire_date, 'Not Defined') AS hired_on FROM employees;",
+    difficulty: "easy"
+  },
+  {
+    id: "sql-except-customers-42",
+    chapter: 5,
+    topic: "UNION / INTERSECT",
+    title: "Shared Cities (INTERSECT)",
+    prompt: "Retrieve a list of cities that exist in both the `customers` table (under `city`) and the `departments` table (under `location`) using the INTERSECT operator.",
+    starterCode: "-- Find shared locations using INTERSECT\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 3, msg: "Exactly 3 locations are shared: New York, London, and Paris" }
+    ],
+    hint: "Use SELECT city FROM customers INTERSECT SELECT location FROM departments.",
+    solution: "SELECT city FROM customers INTERSECT SELECT location FROM departments;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-lag-order-43",
+    chapter: 18,
+    topic: "Window Functions",
+    title: "Lagging Order Amounts",
+    prompt: "Retrieve the `order_id`, `customer_id`, `total_amount`, and the previous order's amount for that customer as `prev_order_amount` sorted by `order_id` ascending. Use the LAG window function partitioned by `customer_id` and ordered by `order_id`.",
+    starterCode: "-- Use LAG window function\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns.includes('prev_order_amount'), msg: "Output column must be named 'prev_order_amount'" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 9003 && row[3] === 12000.5), msg: "Order 9003 must show the previous order amount of 12000.5 for customer 501" }
+    ],
+    hint: "Use LAG(total_amount) OVER (PARTITION BY customer_id ORDER BY order_id) AS prev_order_amount.",
+    solution: "SELECT order_id, customer_id, total_amount, LAG(total_amount) OVER (PARTITION BY customer_id ORDER BY order_id) AS prev_order_amount FROM orders;",
+    difficulty: "hard"
+  },
+  {
+    id: "sql-lead-order-44",
+    chapter: 18,
+    topic: "Window Functions",
+    title: "Leading Order Dates",
+    prompt: "For each order, retrieve the `order_id`, `order_date`, and the next order date across all orders as `next_order_date` using the LEAD window function ordered by `order_id`.",
+    starterCode: "-- Use LEAD window function\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values[0][2] === '2023-10-03', msg: "Next order date after 2023-10-01 is 2023-10-03" }
+    ],
+    hint: "Use LEAD(order_date) OVER (ORDER BY order_id) AS next_order_date.",
+    solution: "SELECT order_id, order_date, LEAD(order_date) OVER (ORDER BY order_id) AS next_order_date FROM orders;",
+    difficulty: "hard"
+  },
+  {
+    id: "sql-salary-stats-45",
+    chapter: 9,
+    topic: "HAVING Clause",
+    title: "High Salary Departments Filter",
+    prompt: "Find the `dept_id` and the average employee salary as `avg_salary` for departments where the average salary is greater than 80,000, sorted by `avg_salary` descending.",
+    starterCode: "-- Filter groups with HAVING\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 3, msg: "Exactly 3 departments have an average salary > 80,000" },
+      { rule: (result) => result && result[0].values[0][1] === 125000, msg: "Department 5 has the highest average salary (125,000)" }
+    ],
+    hint: "Group by dept_id, select AVG(salary) as avg_salary, and filter using HAVING avg_salary > 80000.",
+    solution: "SELECT dept_id, AVG(salary) AS avg_salary FROM employees GROUP BY dept_id HAVING AVG(salary) > 80000 ORDER BY avg_salary DESC;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-length-names-46",
+    chapter: 16,
+    topic: "String Wildcards & Concatenation",
+    title: "Name Character Lengths",
+    prompt: "Select the employee name, and the character length of their name as `name_length` for all employees whose name is longer than 10 characters.",
+    starterCode: "-- Use LENGTH() function\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 5, msg: "Exactly 5 employees have names longer than 10 characters" }
+    ],
+    hint: "Use SELECT name, LENGTH(name) AS name_length FROM employees WHERE LENGTH(name) > 10;",
+    solution: "SELECT name, LENGTH(name) AS name_length FROM employees WHERE LENGTH(name) > 10;",
+    difficulty: "easy"
+  },
+  {
+    id: "sql-lower-emails-47",
+    chapter: 16,
+    topic: "String Wildcards & Concatenation",
+    title: "Lower Case City Match",
+    prompt: "Find customer names and countries for customers in 'london' or 'tokyo', but perform a case-insensitive check by converting the `city` column to lower case in the WHERE clause.",
+    starterCode: "-- Case-insensitive city matching\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 2, msg: "Exactly 2 customers are located in London or Tokyo" }
+    ],
+    hint: "Use LOWER(city) IN ('london', 'tokyo').",
+    solution: "SELECT customer_name, country FROM customers WHERE LOWER(city) IN ('london', 'tokyo');",
+    difficulty: "easy"
+  },
+  {
+    id: "sql-avg-order-range-48",
+    chapter: 14,
+    topic: "Conditional CASE Statements",
+    title: "Orders Value Classification",
+    prompt: "Retrieve each `order_id`, `total_amount`, and a column named `value_category` showing: 'High Value' if the amount is >= 10,000, 'Medium Value' if it is >= 5,000 and < 10,000, and 'Low Value' otherwise. Sort by `total_amount` descending.",
+    starterCode: "-- Categorize order values with CASE\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 7, msg: "Must return all 7 orders" },
+      { rule: (result) => result && result[0].values[0][2] === 'High Value', msg: "Top order 9004 must be classified as 'High Value'" }
+    ],
+    hint: "Use CASE WHEN total_amount >= 10000 THEN 'High Value' ... END AS value_category.",
+    solution: "SELECT order_id, total_amount, CASE WHEN total_amount >= 10000 THEN 'High Value' WHEN total_amount >= 5000 THEN 'Medium Value' ELSE 'Low Value' END AS value_category FROM orders ORDER BY total_amount DESC;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-revenue-by-country-49",
+    chapter: 7,
+    topic: "E-Commerce Schema & Filtering",
+    title: "Revenue by Customer Country",
+    prompt: "Compute the sum of order amounts as `total_revenue` for each customer `country`. Retrieve `country` and `total_revenue` ordered by revenue descending.",
+    starterCode: "-- Group orders by country\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values[0][0] === 'USA' && result[0].values[0][1] === 15200.5, msg: "USA has highest revenue (15200.5)" }
+    ],
+    hint: "INNER JOIN orders, customers on customer_id, group by country, SUM(total_amount).",
+    solution: "SELECT c.country, SUM(o.total_amount) AS total_revenue FROM orders o INNER JOIN customers c ON o.customer_id = c.customer_id GROUP BY c.country ORDER BY total_revenue DESC;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-round-salaries-50",
+    chapter: 14,
+    topic: "Conditional CASE Statements",
+    title: "Company Salary Stats Summary",
+    prompt: "Retrieve the average salary of all employees rounded to the nearest integer as `rounded_avg_salary`, and the maximum salary as `max_salary` in a single row summary.",
+    starterCode: "-- Round average salary\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values[0][0] === 89286, msg: "Average company salary rounded is 89,286" },
+      { rule: (result) => result && result[0].values[0][1] === 125000, msg: "Maximum salary is 125,000" }
+    ],
+    hint: "Use ROUND(AVG(salary)) AS rounded_avg_salary, MAX(salary) AS max_salary.",
+    solution: "SELECT ROUND(AVG(salary)) AS rounded_avg_salary, MAX(salary) AS max_salary FROM employees;",
+    difficulty: "medium"
   }
 ];
 

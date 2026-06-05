@@ -52,9 +52,15 @@ export const streak = writable(getStorageSanitized('streak', 0, 'number'));
 export const lastCompletedDate = writable(getStorageSanitized('last_completed_date', '', 'string'));
 export const completedChallenges = writable(getStorageSanitized('completed_challenges', [], 'array'));
 export const completionDates = writable(getStorageSanitized('completion_dates', {}, 'object'));
+export const starredChallenges = writable(getStorageSanitized('starred_challenges', [], 'array'));
 
 export const theme = writable(getStorageSanitized('theme', 'obsidian', 'string'));
 export const soundEnabled = writable(getStorage('sound_enabled', true));
+export const musicEnabled = writable(getStorage('music_enabled', false));
+export const soundVolume = writable(getStorageSanitized('sound_volume', 0.5, 'number'));
+export const musicVolume = writable(getStorageSanitized('music_volume', 0.3, 'number'));
+export const soundStyle = writable(getStorageSanitized('sound_style', 'retro', 'string'));
+export const ambientTrack = writable(getStorageSanitized('ambient_track', 'zen', 'string'));
 export const inventory = writable(getStorageSanitized('inventory', { streakFreezes: 0, xpBoosts: 0 }, 'object'));
 export const unlockedBadges = writable(getStorageSanitized('unlocked_badges', [], 'array'));
 
@@ -104,6 +110,7 @@ completedChallenges.subscribe(val => {
 });
 
 completionDates.subscribe(val => setStorage('completion_dates', val));
+starredChallenges.subscribe(val => setStorage('starred_challenges', val));
 
 theme.subscribe(val => {
   setStorage('theme', val);
@@ -113,6 +120,11 @@ theme.subscribe(val => {
   }
 });
 soundEnabled.subscribe(val => setStorage('sound_enabled', val));
+musicEnabled.subscribe(val => setStorage('music_enabled', val));
+soundVolume.subscribe(val => setStorage('sound_volume', val));
+musicVolume.subscribe(val => setStorage('music_volume', val));
+soundStyle.subscribe(val => setStorage('sound_style', val));
+ambientTrack.subscribe(val => setStorage('ambient_track', val));
 inventory.subscribe(val => setStorage('inventory', val));
 unlockedBadges.subscribe(val => setStorage('unlocked_badges', val));
 

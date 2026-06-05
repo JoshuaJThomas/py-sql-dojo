@@ -1,11 +1,17 @@
 <script>
-  import { language, xp, level, streak, completedChallenges } from '../stores/dojo-store.js';
-  import { Flame, Trophy, Terminal, Database, Code, RefreshCw } from 'lucide-svelte';
+  import { language, xp, level, streak, completedChallenges, musicEnabled, musicVolume, ambientTrack } from '../stores/dojo-store.js';
+  import { Flame, Trophy, Terminal, Database, Code, RefreshCw, Music, Play, Pause, SkipForward, Volume2 } from 'lucide-svelte';
+  import { startAmbientSynth, stopAmbientSynth } from '../utils/soundscapes.js';
 
   let currentLanguage = $derived($language);
   let currentXp = $derived($xp);
   let currentLevel = $derived($level);
   let currentStreak = $derived($streak);
+
+  // Music state bindings
+  let isMusicOn = $derived($musicEnabled);
+  let currentTrack = $derived($ambientTrack);
+  let volVal = $derived($musicVolume);
 
   // Compute percentage progress through current level
   let xpInCurrentLevel = $derived(currentXp % 100);
@@ -14,6 +20,10 @@
   let isXpPulsing = $state(false);
   let prevXp = $state(0);
   let isFirstRun = $state(true);
+
+  // Track panel popover state
+  let showMusicPanel = $state(false);
+
   $effect(() => {
     if (isFirstRun) {
       prevXp = currentXp;
@@ -31,6 +41,34 @@
       prevXp = currentXp;
     }
   });
+
+  // Watch musicEnabled and start/stop audio context loop
+  $effect(() => {
+    if (isMusicOn) {
+      startAmbientSynth();
+    } else {
+      stopAmbientSynth();
+    }
+  });
+
+  function toggleMusic() {
+    musicEnabled.set(!isMusicOn);
+  }
+
+  function nextTrack() {
+    const tracks = ['zen', 'lofi', 'synthwave'];
+    const idx = tracks.indexOf(currentTrack);
+    const nextIdx = (idx + 1) % tracks.length;
+    ambientTrack.set(tracks[nextIdx]);
+    if (isMusicOn) {
+      setTimeout(() => startAmbientSynth(), 50);
+    }
+  }
+
+  function handleVolumeChange(e) {
+    musicVolume.set(Number(e.target.value));
+  }
+
   function setLang(lang) {
     language.set(lang);
   }
@@ -91,6 +129,60 @@
         </div>
       </div>
 
+      <!-- Ambient Music Player (Item 195) -->
+      <div class="music-player-widget">
+        <button 
+          class="music-widget-btn" 
+          class:playing={isMusicOn}
+          onclick={() => showMusicPanel = !showMusicPanel}
+          title="Ambient Backing Tracks"
+        >
+          <Music size={16} class="music-icon" />
+          {#if isMusicOn}
+            <span class="music-wave">
+              <span class="wave-bar"></span>
+              <span class="wave-bar"></span>
+              <span class="wave-bar"></span>
+            </span>
+          {/if}
+        </button>
+        
+        {#if showMusicPanel}
+          <div class="music-popover" style="border-color: var(--color-hairline);">
+            <div class="popover-header">
+              <span class="track-label">Ambient Synth</span>
+              <span class="track-name">{currentTrack.toUpperCase()}</span>
+            </div>
+            
+            <div class="popover-controls">
+              <button class="pop-control-btn" onclick={toggleMusic} title={isMusicOn ? 'Pause' : 'Play'}>
+                {#if isMusicOn}
+                  <Pause size={12} fill="currentColor" />
+                {:else}
+                  <Play size={12} fill="currentColor" />
+                {/if}
+              </button>
+              <button class="pop-control-btn" onclick={nextTrack} title="Next Track">
+                <SkipForward size={12} fill="currentColor" />
+              </button>
+            </div>
+            
+            <div class="popover-volume">
+              <Volume2 size={12} class="vol-icon" />
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.1" 
+                value={volVal} 
+                oninput={handleVolumeChange}
+                class="vol-slider"
+              />
+            </div>
+          </div>
+        {/if}
+      </div>
+
       <!-- Settings / Reset -->
       <button class="reset-btn" onclick={resetAllProgress} title="Reset Progress">
         <RefreshCw size={16} />
@@ -100,6 +192,142 @@
 </header>
 
 <style>
+  .music-player-widget {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .music-widget-btn {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    color: var(--color-muted);
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .music-widget-btn.playing {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: var(--color-accent-glow);
+  }
+
+  .music-wave {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 10px;
+    margin-left: 2px;
+  }
+
+  .wave-bar {
+    width: 2px;
+    height: 100%;
+    background: var(--color-primary);
+    animation: bounce-wave 1s ease-in-out infinite alternate;
+  }
+
+  .wave-bar:nth-child(2) { height: 60%; animation-delay: 0.15s; }
+  .wave-bar:nth-child(3) { height: 80%; animation-delay: 0.3s; }
+
+  @keyframes bounce-wave {
+    0% { height: 30%; }
+    100% { height: 100%; }
+  }
+
+  .music-popover {
+    position: absolute;
+    top: 46px;
+    right: 0;
+    width: 160px;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 200;
+  }
+
+  .popover-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+  }
+
+  .track-label {
+    font-size: 9px;
+    color: var(--color-muted);
+    text-transform: uppercase;
+  }
+
+  .track-name {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .popover-controls {
+    display: flex;
+    gap: 6px;
+  }
+
+  .pop-control-btn {
+    flex: 1;
+    height: 24px;
+    background: var(--color-tab-inactive);
+    border: 1px solid var(--color-hairline);
+    border-radius: 4px;
+    color: var(--color-ink);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pop-control-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .popover-volume {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .vol-icon {
+    color: var(--color-muted);
+  }
+
+  .vol-slider {
+    flex: 1;
+    height: 4px;
+    background: var(--color-tab-inactive);
+    border-radius: 2px;
+    outline: none;
+    -webkit-appearance: none;
+  }
+
+  .vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 10px;
+    background: var(--color-primary);
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
   .dojo-header {
     background: var(--color-header-bg);
     border-bottom: 1px solid var(--color-hairline);
