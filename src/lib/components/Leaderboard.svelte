@@ -1,6 +1,6 @@
 <script>
   import { onMount, untrack } from 'svelte';
-  import { xp, level, completedChallenges } from '../stores/dojo-store.js';
+  import { xp, level, completedChallenges, inventory } from '../stores/dojo-store.js';
   import { Trophy, Shield, MessageSquare, Clock, Zap, Star, ShieldCheck } from 'lucide-svelte';
 
   let userXp = $derived($xp);
@@ -213,7 +213,12 @@
           <div class="row-avatar">{item.avatar}</div>
 
           <div class="row-main">
-            <span class="row-name">{item.name}</span>
+            <span class="row-name">
+              {item.name}
+              {#if item.isUser && $inventory.hasLeaderboardFlair}
+                <span class="crown-flair" title="Dojo Master Crown">👑</span>
+              {/if}
+            </span>
             <span class="row-title">{item.title}</span>
           </div>
 
@@ -402,6 +407,18 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .crown-flair {
+    display: inline-block;
+    margin-left: 4px;
+    filter: drop-shadow(0 0 4px #eab308);
+    animation: crown-pulse 2s infinite ease-in-out;
+  }
+
+  @keyframes crown-pulse {
+    0%, 100% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 2px #eab308); }
+    50% { transform: scale(1.15) rotate(5deg); filter: drop-shadow(0 0 6px #fbbf24); }
   }
 
   .row-title {

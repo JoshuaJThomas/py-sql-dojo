@@ -151,6 +151,32 @@
     }).join(' ');
   });
 
+  let areaPathXp = $derived.by(() => {
+    const width = 360;
+    const height = 150;
+    const pad = 25;
+    const bottomY = height - pad;
+    
+    if (xpGrowthData.length <= 1) return `M ${pad} ${bottomY} L ${width - pad} ${bottomY} Z`;
+
+    const maxX = xpGrowthData.length - 1;
+    const maxY = Math.max(10, ...xpGrowthData.map(d => d.xp));
+
+    const pathPoints = xpGrowthData.map((d, idx) => {
+      const x = pad + (idx / maxX) * (width - 2 * pad);
+      const y = height - pad - (d.xp / maxY) * (height - 2 * pad);
+      return `${idx === 0 ? 'M' : 'L'} ${x} ${y}`;
+    });
+
+    const firstX = pad;
+    const lastX = pad + (maxX / maxX) * (width - 2 * pad);
+    return `${pathPoints.join(' ')} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
+  });
+
+  // State variables for chart hover tooltips (Item 160)
+  let hoveredRadarIndex = $state(null);
+  let hoveredXpPoint = $state(null);
+
   // Clipboard copy progress summary
   function copyProgressToClipboard() {
     const text = `🌌 Gemini Dojo Coding Progress Summary 🌌\n` +
@@ -214,7 +240,7 @@
 
   <div class="analytics-charts-grid">
     <!-- Chart 1: Topic Radar Chart -->
-    <div class="chart-box">
+    <div class="chart-box" style="position: relative;">
       <h3>Syllabus Topic Strengths (Radar)</h3>
       <div class="chart-canvas-wrap">
         <svg viewBox="0 0 300 240" width="100%" height="100%">
@@ -225,9 +251,10 @@
             </radialGradient>
           </defs>
 
-          <!-- Outer grid circles -->
+          <!-- Outer grid circles and percentage ticks -->
           {#each [0.25, 0.5, 0.75, 1.0] as scale}
             <circle cx="150" cy="130" r={80 * scale} fill="none" stroke="var(--color-hairline)" stroke-width="1" />
+            <text x="150" y={130 - 80 * scale + 8} text-anchor="middle" font-size="7" fill="var(--color-muted)" font-family="var(--font-mono)">{scale * 100}%</text>
             {#if scale === 1.0}
               <!-- Radar axes lines -->
               {#each radarGridLines as line}
@@ -239,7 +266,7 @@
                   text-anchor={line.x2 > 149 ? 'start' : 'end'}
                   class="radar-axis-label"
                 >
-                  {line.name.substring(0, 12)}
+                  {line.name.substring(0, 14)}
                 </text>
               {/each}
             {/if}
@@ -247,15 +274,66 @@
 
           <!-- Filled radar polygon -->
           <polygon points={radarPointsStr} fill="url(#radarGlow)" stroke="var(--color-primary)" stroke-width="2" />
+
+          <!-- Interactive hover points on Radar vertices (Item 160) -->
+          {#each categoriesData as cat, idx}
+            {@const angle = (idx * 2 * Math.PI) / categoriesData.length - Math.PI / 2}
+            {@const amount = cat.percentage / 100}
+            {@const px = 150 + 80 * amount * Math.cos(angle)}
+            {@const py = 130 + 80 * amount * Math.sin(angle)}
+            <!-- Glow dot on vertex -->
+            <circle cx={px} cy={py} r="4" fill="var(--color-canvas)" stroke="var(--color-primary)" stroke-width="2.5" />
+            
+            <!-- Large invisible hover target -->
+            <circle 
+              cx={px} 
+              cy={py} 
+              r="12" 
+              fill="transparent" 
+              style="cursor: pointer;"
+              onmouseenter={() => hoveredRadarIndex = idx}
+              onmouseleave={() => hoveredRadarIndex = null}
+              role="presentation"
+            />
+          {/each}
         </svg>
+
+        <!-- Floating Radar Tooltip -->
+        {#if hoveredRadarIndex !== null}
+          {@const hoveredCat = categoriesData[hoveredRadarIndex]}
+          <div class="chart-tooltip radar-tooltip">
+            <strong>{hoveredCat.name}</strong>
+            <span class="xp">{hoveredCat.percentage.toFixed(0)}% Mastery</span>
+            <span class="sub">{hoveredCat.completed} / {hoveredCat.total} exercises solved</span>
+          </div>
+        {/if}
       </div>
     </div>
 
     <!-- Chart 2: Cumulative XP Growth Line -->
-    <div class="chart-box">
+    <div class="chart-box" style="position: relative;">
       <h3>Experience Accrual (Cumulative)</h3>
       <div class="chart-canvas-wrap">
         <svg viewBox="0 0 360 150" width="100%" height="100%">
+          <defs>
+            <linearGradient id="areaGlow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--color-primary)" stop-opacity="0.2"/>
+              <stop offset="100%" stop-color="var(--color-primary)" stop-opacity="0.0"/>
+            </linearGradient>
+          </defs>
+
+          <!-- Y-axis Grid Lines & Labels -->
+          {#each [0, 0.5, 1.0] as ratio}
+            {@const yVal = 150 - 25 - ratio * (150 - 50)}
+            {@const maxY = Math.max(10, ...xpGrowthData.map(d => d.xp))}
+            {@const labelVal = Math.round(ratio * maxY)}
+            <line x1="25" y1={yVal} x2="335" y2={yVal} stroke="var(--color-hairline)" stroke-width="0.5" stroke-dasharray="2,2" />
+            <text x="20" y={yVal + 3} text-anchor="end" font-size="8" fill="var(--color-muted)" font-family="var(--font-mono)">{labelVal}</text>
+          {/each}
+
+          <!-- Area path filled with gradient -->
+          <path d={areaPathXp} fill="url(#areaGlow)" />
+          
           <!-- Line path -->
           <path d={linePathXp} fill="none" stroke="var(--color-primary)" stroke-width="2.5" />
           
@@ -265,9 +343,41 @@
             {@const maxY = Math.max(10, ...xpGrowthData.map(d => d.xp))}
             {@const px = 25 + (idx / maxX) * (360 - 50)}
             {@const py = 150 - 25 - (pt.xp / maxY) * (150 - 50)}
+            
             <circle cx={px} cy={py} r="4" fill="var(--color-canvas)" stroke="var(--color-primary)" stroke-width="2" />
+            
+            <!-- Large invisible hover target -->
+            <circle 
+              cx={px} 
+              cy={py} 
+              r="12" 
+              fill="transparent" 
+              style="cursor: pointer;"
+              onmouseenter={() => hoveredXpPoint = { ...pt, x: px, y: py }}
+              onmouseleave={() => hoveredXpPoint = null}
+              role="presentation"
+            />
+          {/each}
+
+          <!-- X-axis Labels (Dates) -->
+          {#each xpGrowthData as pt, idx}
+            {@const maxX = xpGrowthData.length - 1}
+            {@const px = 25 + (idx / maxX) * (360 - 50)}
+            {#if idx === 0 || idx === maxX || (maxX > 2 && idx === Math.floor(maxX / 2))}
+              {@const formattedDate = pt.date.includes('/') || pt.date.includes('-') ? new Date(pt.date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : pt.date}
+              <text x={px} y="142" text-anchor="middle" font-size="8" fill="var(--color-muted)" font-family="var(--font-mono)">{formattedDate}</text>
+            {/if}
           {/each}
         </svg>
+
+        <!-- Floating XP Tooltip -->
+        {#if hoveredXpPoint !== null}
+          {@const formattedDate = hoveredXpPoint.date.includes('/') || hoveredXpPoint.date.includes('-') ? new Date(hoveredXpPoint.date).toLocaleDateString(undefined, {month: 'long', day: 'numeric', year: 'numeric'}) : hoveredXpPoint.date}
+          <div class="chart-tooltip xp-tooltip" style="left: {hoveredXpPoint.x - 30}px; top: {hoveredXpPoint.y - 50}px;">
+            <span class="date">{formattedDate}</span>
+            <strong class="xp">{hoveredXpPoint.xp} XP Cumulative</strong>
+          </div>
+        {/if}
       </div>
     </div>
   </div>
@@ -504,5 +614,53 @@
     font-weight: 700;
     color: var(--color-ink);
     mix-blend-mode: difference;
+  }
+
+  .chart-tooltip {
+    position: absolute;
+    background: #101015;
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-xs);
+    padding: 8px 12px;
+    pointer-events: none;
+    font-size: 11px;
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+  }
+
+  .radar-tooltip {
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-color: var(--color-primary);
+    min-width: 180px;
+    text-align: center;
+  }
+
+  .xp-tooltip {
+    transform: translateX(-50%);
+    white-space: nowrap;
+    border-color: #8b5cf6;
+  }
+
+  .chart-tooltip .sub {
+    font-size: 9px;
+    color: var(--color-muted);
+  }
+
+  .chart-tooltip .date {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--color-muted);
+    text-transform: uppercase;
+  }
+
+  .chart-tooltip .xp {
+    color: #eab308;
+    font-weight: 700;
   }
 </style>

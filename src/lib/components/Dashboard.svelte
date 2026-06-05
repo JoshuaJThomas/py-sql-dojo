@@ -322,16 +322,46 @@
       alert("Insufficient XP! Train on more challenges to earn XP.");
       return;
     }
+    
+    // Check if they already own it (for permanent items)
+    const invVal = $inventory;
+    if (itemType === 'wizard' && invVal.unlockedPersonas?.includes('wizard')) {
+      alert("You already unlocked the SQL Wizard Mentor!");
+      return;
+    }
+    if (itemType === 'flair' && invVal.hasLeaderboardFlair) {
+      alert("You already unlocked the Dojo Crown Flair!");
+      return;
+    }
+    if (itemType === 'cheats' && invVal.advancedCheatsUnlocked) {
+      alert("You already unlocked the Advanced Cheats Pack!");
+      return;
+    }
+
     xp.set(currentXpVal - cost);
     inventory.update(inv => {
       if (itemType === 'shield') {
         inv.streakFreezes = (inv.streakFreezes || 0) + 1;
       } else if (itemType === 'boost') {
         inv.xpBoosts = (inv.xpBoosts || 0) + 1;
+      } else if (itemType === 'wizard') {
+        inv.unlockedPersonas = [...(inv.unlockedPersonas || []), 'wizard'];
+      } else if (itemType === 'flair') {
+        inv.hasLeaderboardFlair = true;
+      } else if (itemType === 'cheats') {
+        inv.advancedCheatsUnlocked = true;
       }
       return inv;
     });
-    alert(`Successfully purchased ${itemType === 'shield' ? 'Streak Freeze Shield' : 'XP Double Booster'} for ${cost} XP!`);
+
+    let itemName = '';
+    if (itemType === 'shield') itemName = 'Streak Freeze Shield';
+    else if (itemType === 'boost') itemName = 'XP Double Booster';
+    else if (itemType === 'wizard') itemName = 'SQL Wizard Mentor';
+    else if (itemType === 'flair') itemName = 'Dojo Crown Flair';
+    else if (itemType === 'cheats') itemName = 'Advanced Cheats Pack';
+
+    alert(`Successfully purchased ${itemName} for ${cost} XP!`);
   }
 
   // Backup Schema Validator
@@ -630,6 +660,24 @@
                 <Zap size={12} class="inv-ic" />
                 <span>XP Boosts: {activeInventory.xpBoosts || 0}</span>
               </span>
+              {#if activeInventory.unlockedPersonas?.includes('wizard')}
+                <span class="shop-inv-badge premium">
+                  <Database size={12} class="inv-ic" />
+                  <span>SQL Wizard Mentor</span>
+                </span>
+              {/if}
+              {#if activeInventory.hasLeaderboardFlair}
+                <span class="shop-inv-badge premium">
+                  <Star size={12} class="inv-ic" />
+                  <span>👑 Crown Flair</span>
+                </span>
+              {/if}
+              {#if activeInventory.advancedCheatsUnlocked}
+                <span class="shop-inv-badge premium">
+                  <Code size={12} class="inv-ic" />
+                  <span>Advanced Cheats</span>
+                </span>
+              {/if}
             </div>
             <span class="shop-xp-balance">Balance: <strong>{currentXp} XP</strong></span>
           </div>
@@ -668,6 +716,75 @@
                 <button class="buy-btn" onclick={() => buyItem('boost', 350)} disabled={currentXp < 350}>
                   Buy Booster
                 </button>
+              </div>
+            </div>
+
+            <!-- SQL Wizard Mentor -->
+            <div class="shop-item-card">
+              <div class="shop-item-header">
+                <div class="shop-item-icon-box wizard-box">
+                  <Database size={20} />
+                </div>
+                <div class="shop-item-details">
+                  <h4>SQL Wizard Mentor</h4>
+                  <p>Unlock the "SQL Wizard" persona in the AI Mentor chatbot sidebar.</p>
+                </div>
+              </div>
+              <div class="shop-item-buy">
+                <span class="shop-item-price">450 XP</span>
+                {#if activeInventory.unlockedPersonas?.includes('wizard')}
+                  <button class="buy-btn owned" disabled>Owned</button>
+                {:else}
+                  <button class="buy-btn" onclick={() => buyItem('wizard', 450)} disabled={currentXp < 450}>
+                    Unlock Mentor
+                  </button>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Dojo Crown Flair -->
+            <div class="shop-item-card">
+              <div class="shop-item-header">
+                <div class="shop-item-icon-box flair-box">
+                  <Star size={20} />
+                </div>
+                <div class="shop-item-details">
+                  <h4>Dojo Crown Flair</h4>
+                  <p>Add a glowing 👑 crown next to your name on the Leaderboard.</p>
+                </div>
+              </div>
+              <div class="shop-item-buy">
+                <span class="shop-item-price">600 XP</span>
+                {#if activeInventory.hasLeaderboardFlair}
+                  <button class="buy-btn owned" disabled>Owned</button>
+                {:else}
+                  <button class="buy-btn" onclick={() => buyItem('flair', 600)} disabled={currentXp < 600}>
+                    Unlock Flair
+                  </button>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Advanced Cheats Pack -->
+            <div class="shop-item-card">
+              <div class="shop-item-header">
+                <div class="shop-item-icon-box cheats-box">
+                  <Code size={20} />
+                </div>
+                <div class="shop-item-details">
+                  <h4>Advanced Cheats Pack</h4>
+                  <p>Unlock advanced SQL and NumPy/Pandas snippets in the Cheats drawer.</p>
+                </div>
+              </div>
+              <div class="shop-item-buy">
+                <span class="shop-item-price">300 XP</span>
+                {#if activeInventory.advancedCheatsUnlocked}
+                  <button class="buy-btn owned" disabled>Owned</button>
+                {:else}
+                  <button class="buy-btn" onclick={() => buyItem('cheats', 300)} disabled={currentXp < 300}>
+                    Unlock Cheats
+                  </button>
+                {/if}
               </div>
             </div>
           </div>
@@ -1663,6 +1780,38 @@
     background: rgba(234, 179, 8, 0.08);
     border: 1px solid rgba(234, 179, 8, 0.2);
     color: #eab308;
+  }
+
+  .wizard-box {
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    color: #8b5cf6;
+  }
+
+  .flair-box {
+    background: rgba(244, 63, 94, 0.08);
+    border: 1px solid rgba(244, 63, 94, 0.2);
+    color: #f43f5e;
+  }
+
+  .cheats-box {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: #10b981;
+  }
+
+  .shop-inv-badge.premium {
+    border-color: rgba(168, 85, 247, 0.3);
+    background: rgba(168, 85, 247, 0.05);
+    color: #c084fc;
+    box-shadow: 0 0 6px rgba(168, 85, 247, 0.1);
+  }
+
+  .buy-btn.owned {
+    background: #1e293b;
+    border-color: #334155;
+    color: #64748b;
+    cursor: not-allowed;
   }
 
   .shop-item-details h4 {

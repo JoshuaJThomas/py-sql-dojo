@@ -19,6 +19,7 @@
     completeChallenge,
     level,
     xp,
+    inventory,
     checkVanguardIntegrity,
     checkDailyStreakOnLoad
   } from './lib/stores/dojo-store.js';
@@ -1106,6 +1107,30 @@
                         <code>df.groupby()</code>
                         <span>Pandas GroupBy</span>
                       </button>
+
+                      <!-- Advanced Python snippets -->
+                      {#if $inventory.advancedCheatsUnlocked}
+                        <button class="snippet-item premium" onclick={() => insertSnippet('import pandas as pd\nimport numpy as np\nimport matplotlib.pyplot as plt\n%matplotlib inline\n')}>
+                          <code>plt.plot() + inline</code>
+                          <span>ML Plot Setup</span>
+                        </button>
+                        <button class="snippet-item premium" onclick={() => insertSnippet('df.drop_duplicates(inplace=True)\ndf.fillna(df.mean(), inplace=True)\n')}>
+                          <code>df.fillna()</code>
+                          <span>Pandas Cleanse</span>
+                        </button>
+                        <button class="snippet-item premium" onclick={() => insertSnippet('from sklearn.model_selection import train_test_split\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=101)\n')}>
+                          <code>train_test_split</code>
+                          <span>Scikit Train Split</span>
+                        </button>
+                        <button class="snippet-item premium" onclick={() => insertSnippet('from sklearn.preprocessing import StandardScaler\nscaler = StandardScaler()\nscaled_X = scaler.fit_transform(X_train)\n')}>
+                          <code>StandardScaler</code>
+                          <span>Scale Features</span>
+                        </button>
+                      {:else}
+                        <div class="snippet-locked-banner" title="Unlock in Dojo Shop">
+                          <span>🔒 Locked: Purchase "Advanced Cheats Pack" in Dojo Shop to unlock premium ML snippets.</span>
+                        </div>
+                      {/if}
                     {:else}
                       <button class="snippet-item" onclick={() => insertSnippet('SELECT * FROM table;\n')}>
                         <code>SELECT * FROM...</code>
@@ -1131,6 +1156,30 @@
                         <code>WITH cte AS (...)</code>
                         <span>Common Table Exp.</span>
                       </button>
+
+                      <!-- Advanced SQL snippets -->
+                      {#if $inventory.advancedCheatsUnlocked}
+                        <button class="snippet-item premium" onclick={() => insertSnippet('SELECT col, \n       AVG(col) OVER (ORDER BY date_col ROWS BETWEEN 3 PRECEDING AND CURRENT ROW) as moving_avg\nFROM table;\n')}>
+                          <code>ROWS BETWEEN...</code>
+                          <span>Moving Average</span>
+                        </button>
+                        <button class="snippet-item premium" onclick={() => insertSnippet('SELECT col,\n       CASE WHEN score >= 90 THEN \'A\'\n            WHEN score >= 80 THEN \'B\'\n            ELSE \'C\' END as grade\nFROM table;\n')}>
+                          <code>CASE WHEN...</code>
+                          <span>Conditional Logic</span>
+                        </button>
+                        <button class="snippet-item premium" onclick={() => insertSnippet('SELECT t1.col,\n       (SELECT COUNT(*) FROM t2 WHERE t2.t1_id = t1.id) as child_count\nFROM t1;\n')}>
+                          <code>Correlated Subquery</code>
+                          <span>Correlated Count</span>
+                        </button>
+                        <button class="snippet-item premium" onclick={() => insertSnippet('CREATE INDEX idx_tbl_col ON tbl (col);\n')}>
+                          <code>CREATE INDEX ...</code>
+                          <span>Optimize Lookup</span>
+                        </button>
+                      {:else}
+                        <div class="snippet-locked-banner" title="Unlock in Dojo Shop">
+                          <span>🔒 Locked: Purchase "Advanced Cheats Pack" in Dojo Shop to unlock premium SQL window and index snippets.</span>
+                        </div>
+                      {/if}
                     {/if}
                   </div>
                 </div>
@@ -2579,6 +2628,35 @@
     font-size: 10px;
     color: var(--color-muted);
     font-weight: 500;
+  }
+
+  .snippet-item.premium {
+    border-color: rgba(139, 92, 246, 0.3);
+    background: rgba(139, 92, 246, 0.02);
+  }
+
+  .snippet-item.premium:hover {
+    border-color: #8b5cf6;
+    background: rgba(139, 92, 246, 0.08);
+  }
+
+  .snippet-locked-banner {
+    grid-column: 1 / -1;
+    background: #101015;
+    border: 1px dashed #232334;
+    border-radius: var(--radius-xs);
+    padding: 14px;
+    font-size: 11px;
+    color: var(--color-muted);
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .snippet-locked-banner:hover {
+    border-color: #8b5cf6;
+    color: #a855f7;
+    background: rgba(139, 92, 246, 0.04);
   }
 
   @media (max-width: 320px) {
