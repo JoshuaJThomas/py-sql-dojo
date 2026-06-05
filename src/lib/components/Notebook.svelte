@@ -10,6 +10,7 @@
     challengeId = 'sandbox',
     language = 'python',
     starterCode = '',
+    insertedSnippet = $bindable(''),
     onNotebookCodeChange = null // callback when notebook code is updated
   } = $props();
 
@@ -91,6 +92,27 @@
       if (onNotebookCodeChange) {
         onNotebookCodeChange(fullCode);
       }
+    }
+  });
+
+  $effect(() => {
+    if (insertedSnippet) {
+      // Find the active cell or the first code cell
+      let targetCell = cells.find(c => c.id === activeEditCellId && c.type === 'code');
+      if (!targetCell) {
+        targetCell = cells.find(c => c.type === 'code');
+      }
+      
+      if (targetCell) {
+        if (targetCell.content.endsWith('\n') || targetCell.content === '') {
+          targetCell.content += insertedSnippet;
+        } else {
+          targetCell.content += '\n' + insertedSnippet;
+        }
+      }
+      
+      // Reset the prop so we can insert again
+      insertedSnippet = '';
     }
   });
 
