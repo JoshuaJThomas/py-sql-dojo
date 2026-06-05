@@ -99,3 +99,25 @@ export async function runSqlQuery(seedSql, querySql) {
     dbState
   };
 }
+
+export async function exportDatabase(seedSql, userQuerySql) {
+  const SQL = await loadSqlJsInstance();
+  const db = new SQL.Database();
+  
+  try {
+    if (seedSql) db.run(seedSql);
+    if (userQuerySql) {
+      try {
+        db.run(userQuerySql);
+      } catch (e) {
+        console.error("Error executing user query before export:", e);
+      }
+    }
+    const binaryArray = db.export();
+    db.close();
+    return binaryArray;
+  } catch (err) {
+    db.close();
+    throw err;
+  }
+}
