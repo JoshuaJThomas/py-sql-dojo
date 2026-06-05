@@ -280,6 +280,19 @@ export function completeChallenge(challengeId, isEasy) {
 
     xp.update(val => val + reward);
 
+    // Track daily XP earned (Item 122)
+    if (typeof window !== 'undefined') {
+      const todayStr = new Date().toDateString();
+      const lastXpDate = localStorage.getItem('dojo_last_xp_date');
+      let earnedToday = 0;
+      if (lastXpDate === todayStr) {
+        earnedToday = Number(localStorage.getItem('dojo_daily_xp_earned') || '0');
+      }
+      earnedToday += reward;
+      localStorage.setItem('dojo_daily_xp_earned', String(earnedToday));
+      localStorage.setItem('dojo_last_xp_date', todayStr);
+    }
+
     // Update streak
     const lastDate = get(lastCompletedDate);
 
