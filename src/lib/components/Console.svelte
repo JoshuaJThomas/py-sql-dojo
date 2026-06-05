@@ -385,16 +385,16 @@
                               <code class="detail-val error-highlight">{ch.error_type}: {ch.error_detail}</code>
                             </div>
                           {/if}
-                          {#if ch.has_expected}
-                            <div class="detail-row">
-                              <span class="detail-key">Expected:</span>
-                              <pre class="detail-pre"><code>{ch.expected}</code></pre>
-                            </div>
-                          {/if}
-                          {#if ch.has_actual}
-                            <div class="detail-row">
-                              <span class="detail-key">Returned:</span>
-                              <pre class="detail-pre actual-pre"><code>{ch.actual}</code></pre>
+                          {#if ch.has_expected || ch.has_actual}
+                            <div class="diff-split-container">
+                              <div class="diff-pane expected-pane">
+                                <div class="pane-header">Expected Value</div>
+                                <pre class="pane-code"><code>{ch.expected !== null && ch.expected !== undefined ? ch.expected : 'None'}</code></pre>
+                              </div>
+                              <div class="diff-pane actual-pane">
+                                <div class="pane-header">Actual Returned</div>
+                                <pre class="pane-code"><code>{ch.actual !== null && ch.actual !== undefined ? ch.actual : 'None'}</code></pre>
+                              </div>
                             </div>
                           {/if}
                         </div>
@@ -994,22 +994,7 @@
     font-size: 12px;
   }
 
-  .detail-pre {
-    background: var(--color-editor-bg);
-    border: 1px solid var(--color-hairline);
-    padding: 6px 10px;
-    border-radius: var(--radius-xs);
-    font-family: var(--font-mono);
-    color: var(--color-success-text);
-    margin: 0;
-    white-space: pre-wrap;
-    overflow-x: auto;
-  }
 
-  .actual-pre {
-    color: var(--color-error-text);
-    border-color: var(--color-error-border);
-  }
 
   /* Table Results Styling */
   .table-results-container {
@@ -1398,5 +1383,72 @@
   @keyframes visuals-fadeIn {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Visual Diff Split styling (Item 125) */
+  .diff-split-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+    border-radius: var(--radius-xs);
+    overflow: hidden;
+  }
+
+  .diff-pane {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid transparent;
+    border-radius: var(--radius-xs);
+    overflow: hidden;
+  }
+
+  .expected-pane {
+    background: var(--color-success-bg);
+    border-color: var(--color-success-border);
+  }
+
+  .actual-pane {
+    background: var(--color-error-bg);
+    border-color: var(--color-error-border);
+  }
+
+  .pane-header {
+    font-family: var(--font-body);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 3px 8px;
+    border-bottom: 1px solid transparent;
+  }
+
+  .expected-pane .pane-header {
+    color: var(--color-success);
+    background: rgba(16, 185, 129, 0.08);
+    border-bottom-color: var(--color-success-border);
+  }
+
+  .actual-pane .pane-header {
+    color: var(--color-error);
+    background: rgba(239, 68, 68, 0.08);
+    border-bottom-color: var(--color-error-border);
+  }
+
+  .pane-code {
+    padding: 6px 8px;
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+  }
+
+  .expected-pane .pane-code {
+    color: var(--color-success-text);
+  }
+
+  .actual-pane .pane-code {
+    color: var(--color-error-text);
   }
 </style>
