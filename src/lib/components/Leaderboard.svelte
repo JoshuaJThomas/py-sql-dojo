@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { xp, level, completedChallenges } from '../stores/dojo-store.js';
   import { Trophy, Shield, MessageSquare, Clock, Zap, Star, ShieldCheck } from 'lucide-svelte';
 
@@ -160,9 +160,11 @@
   $effect(() => {
     const currentScore = userXp;
     const completedCount = completedList.length;
-    if (competitors.length > 0) {
-      updateUserScore();
-    }
+    untrack(() => {
+      if (competitors.length > 0) {
+        updateUserScore();
+      }
+    });
   });
 </script>
 
