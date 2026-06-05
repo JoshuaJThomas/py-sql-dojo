@@ -124,8 +124,8 @@
   // Runner state
   let isRunning = $state(false);
   let hasRun = $state(false);
-  let pyResult = $state({ success: false, stdout: '', error: '', checksPassed: false, checksResults: [], executionTime: null });
-  let sqlResult = $state({ success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [], executionTime: null });
+  let pyResult = $state({ success: false, stdout: '', error: '', checksPassed: false, checksResults: [], executionTime: null, executedCode: '' });
+  let sqlResult = $state({ success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [], executionTime: null, executedCode: '' });
   let showCheatSheet = $state(false);
 
   // UI state
@@ -178,8 +178,8 @@
     quizAnswered = false;
     quizCorrect = false;
     
-    pyResult = { success: false, stdout: '', error: '', checksPassed: false, checksResults: [] };
-    sqlResult = { success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [] };
+    pyResult = { success: false, stdout: '', error: '', checksPassed: false, checksResults: [], executionTime: null, executedCode: '' };
+    sqlResult = { success: false, result: null, error: '', schema: {}, dbState: {}, checksPassed: false, checksResults: [], executionTime: null, executedCode: '' };
 
     if (lang === 'python') {
       activeTabRight = 'console';
@@ -416,6 +416,56 @@
     }
   }
 
+  // SQL check enrichment helper
+  function enrichSqlCheckResult(check, result) {
+    let has_expected = false;
+    let expected = "";
+    let has_actual = false;
+    let actual = "";
+    
+    if (!result || result.length === 0) {
+      return {
+        has_expected: true,
+        expected: "Valid query result rows",
+        has_actual: true,
+        actual: "No rows returned (empty result)"
+      };
+    }
+    
+    const cols = result[0].columns || [];
+    const rows = result[0].values || [];
+    const msg = (check.msg || "").toLowerCase();
+    
+    if (msg.includes("columns") || msg.includes("column")) {
+      has_expected = true;
+      const matches = check.msg.match(/'([^']+)'/g);
+      if (matches) {
+        expected = matches.join(", ");
+      } else {
+        expected = "Specific columns";
+      }
+      has_actual = true;
+      actual = `[${cols.join(", ")}]`;
+    } else if (msg.includes("rows") || msg.includes("row count") || msg.includes("exactly") || msg.includes("return")) {
+      has_expected = true;
+      const matches = check.msg.match(/\d+/);
+      if (matches) {
+        expected = `${matches[0]} rows`;
+      } else {
+        expected = "Specific row count";
+      }
+      has_actual = true;
+      actual = `${rows.length} rows`;
+    } else {
+      has_expected = true;
+      expected = "Fulfill check constraint";
+      has_actual = true;
+      actual = rows.length > 0 ? `Returned ${rows.length} rows. First row: [${rows[0].join(", ")}]` : "0 rows";
+    }
+    
+    return { has_expected, expected, has_actual, actual };
+  }
+
   // Execute active task
   async function runCode() {
     isRunning = true;
@@ -430,7 +480,7 @@
       const oldLevel = get(level);
       const outcome = await runPythonCode(currentChallenge.prelude, code, currentChallenge.checks);
       const endTime = performance.now();
-      pyResult = { ...outcome, executionTime: endTime - startTime };
+      pyResult = { ...outcome, executionTime: endTime - startTime, executedCode: code };
 
       if (!isSandboxMode && outcome.success && outcome.checksPassed) {
         const newlyUnlocked = completeChallenge(currentChallenge.id, currentChallenge.difficulty);
@@ -459,7 +509,6 @@
       const seedToUse = (isSandboxMode && customDdlSeed.trim()) ? customDdlSeed : sqlDbSeed;
       const outcome = await runSqlQuery(seedToUse, code);
       const endTime = performance.now();
-      sqlResult = { ...outcome, executionTime: endTime - startTime };
 
       // Evaluate the custom SQL checks array
       let allChecksPassed = true;
@@ -473,7 +522,12 @@
           } catch (e) {
             passed = false;
           }
-          checksResults.push({ passed, msg: check.msg });
+          
+          let enrichment = {};
+          if (!passed) {
+            enrichment = enrichSqlCheckResult(check, outcome.result);
+          }
+          checksResults.push({ passed, msg: check.msg, ...enrichment });
           if (!passed) allChecksPassed = false;
         }
       } else {
@@ -481,8 +535,13 @@
         checksResults.push({ passed: false, msg: "Database query execution failed." });
       }
 
-      sqlResult.checksPassed = allChecksPassed;
-      sqlResult.checksResults = checksResults;
+      sqlResult = { 
+        ...outcome, 
+        executionTime: endTime - startTime, 
+        executedCode: code,
+        checksPassed: allChecksPassed, 
+        checksResults: checksResults 
+      };
 
       if (!isSandboxMode && allChecksPassed) {
         const oldLevel = get(level);
@@ -1283,7 +1342,8 @@
                   isRunning={isRunning}
                   executionTime={activeLang === 'python' ? pyResult.executionTime : sqlResult.executionTime}
                   onExecuteQuery={runQueryDirectly}
-                  rawQuery={code}
+                  rawQuery={activeLang === 'python' ? pyResult.executedCode : sqlResult.executedCode}
+                  executedCode={activeLang === 'python' ? pyResult.executedCode : sqlResult.executedCode}
                 />
               {:else}
                 <SchemaBrowser schema={sqlResult.schema || {}} dbState={sqlResult.dbState || {}} />

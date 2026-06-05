@@ -93,7 +93,16 @@ for c in __checks_list__:
 
     try:
         # Run the assertion in the global scope
-        exec(test_str, globals())
+        try:
+            val = eval(test_str, globals())
+            if hasattr(val, 'any'):
+                if not val.any():
+                    raise AssertionError("Assertion evaluated to False")
+            elif not val:
+                raise AssertionError("Assertion evaluated to False")
+        except SyntaxError:
+            exec(test_str, globals())
+            
         __results_list__.append({
             "passed": True, 
             "msg": c["msg"]
@@ -112,6 +121,14 @@ for c in __checks_list__:
                 actual_val = f"<Error evaluating output: {type(eval_err).__name__}>"
                 has_actual = True
         
+        if not has_actual:
+            try:
+                if "result" in globals():
+                    actual_val = repr(globals()["result"])
+                    has_actual = True
+            except:
+                pass
+
         __results_list__.append({
             "passed": False, 
             "msg": c["msg"],

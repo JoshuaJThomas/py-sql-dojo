@@ -15,8 +15,122 @@
     isRunning = false,
     executionTime = null,
     rawQuery = '',
+    executedCode = '',
     onExecuteQuery = null
   } = $props();
+
+  function getFriendlyType(valStr) {
+    if (!valStr) return "unknown type";
+    if (valStr.startsWith("'") || valStr.startsWith('"')) return "string";
+    if (valStr.startsWith('[') && valStr.endsWith(']')) return "list";
+    if (valStr.startsWith('(') && valStr.endsWith(')')) return "tuple";
+    if (valStr.startsWith('{') && valStr.endsWith('}')) return "dictionary/set";
+    if (!isNaN(Number(valStr))) return "number";
+    return typeof valStr;
+  }
+
+  function generateSmartFeedback(check, type, code) {
+    if (check.passed) return "";
+    
+    const actual = check.actual;
+    const expected = check.expected;
+    const msg = (check.msg || "").toLowerCase();
+    
+    const actualStr = actual ? actual.trim() : "";
+    const expectedStr = expected ? expected.trim() : "";
+    
+    // 1. Syntax / Name error case
+    if (check.error_type && check.error_type !== 'AssertionError') {
+      if (check.error_type === 'NameError') {
+        return `A variable used in the test (e.g. 'result') is not defined. Did you spell it correctly or forget to declare/initialize it?`;
+      }
+      if (check.error_type === 'TypeError') {
+        return `Type error encountered: ${check.error_detail}. Check if you're trying to perform operations on incompatible types (e.g., adding a string to an integer).`;
+      }
+      if (check.error_type === 'IndexError') {
+        return `Index error: ${check.error_detail}. You are trying to access a list element at an index that doesn't exist. Check your list bounds!`;
+      }
+      if (check.error_type === 'KeyError') {
+        return `Key error: ${check.error_detail}. You are trying to access a dictionary key that doesn't exist.`;
+      }
+      return `Your code ran but failed with a ${check.error_type}: ${check.error_detail}`;
+    }
+
+    // Determine actual friendly type
+    const actualType = getFriendlyType(actualStr);
+
+    // 2. Message-based type analysis (if actual is not None)
+    if (actualStr !== "None" && actualStr !== "") {
+      if (msg.includes("tuple") && actualType !== "tuple") {
+        return `Type mismatch! The check expects a **tuple** (e.g., \`(x, y)\`), but your \`result\` is a **${actualType}** (\`${actualStr}\`). Hint: Use parentheses to define tuples.`;
+      }
+      if (msg.includes("list") && actualType !== "list") {
+        return `Type mismatch! The check expects a **list** (e.g., \`[1, 2]\`), but your \`result\` is a **${actualType}** (\`${actualStr}\`). Hint: Use square brackets to define lists.`;
+      }
+      if (msg.includes("dictionary") || msg.includes("dict")) {
+        if (actualType !== "dictionary/set") {
+          return `Type mismatch! The check expects a **dictionary** (e.g., \`{'a': 1}\`), but your \`result\` is a **${actualType}** (\`${actualStr}\`).`;
+        }
+      }
+    }
+
+    // 3. String value casing or mismatch check
+    const isExpectedString = (expectedStr.startsWith("'") && expectedStr.endsWith("'")) || (expectedStr.startsWith('"') && expectedStr.endsWith('"'));
+    const isActualString = actualType === "string";
+    
+    if (isExpectedString && isActualString) {
+      const expContent = expectedStr.slice(1, -1);
+      const actContent = actualStr.slice(1, -1);
+      if (expContent.toLowerCase() === actContent.toLowerCase()) {
+        return `Casing discrepancy! You returned "${actContent}", which matches the text but has wrong capitalization. Python is case-sensitive: expected exactly "${expContent}".`;
+      }
+      return `You assigned \`"${actContent}"\` but expected \`"${expContent}"\`. Check if the string has typos.`;
+    }
+
+    // 4. Missing assignment check
+    if (actualStr === "None" || actualStr === "") {
+      const hasAssignment = code && (code.includes('result =') || code.includes('result=') || code.includes('def '));
+      if (!hasAssignment) {
+        return `The variable \`result\` is not assigned in your code. The test expects you to save the output to the variable \`result\`.`;
+      }
+      return `\`result\` is currently \`None\`. If you defined a function, did you forget to include a \`return\` statement or assign the function's return value to \`result\`?`;
+    }
+
+    // 5. Array/List length checks
+    if (actualType === "list" && expectedStr.startsWith('[') && expectedStr.endsWith(']')) {
+      try {
+        const expLen = (expectedStr.match(/,/g) || []).length + 1;
+        const actLen = (actualStr.match(/,/g) || []).length + 1;
+        if (expLen !== actLen) {
+          return `Size mismatch! Your list contains ${actLen} item(s), but the test expects ${expLen} item(s). Expected: \`${expectedStr}\`.`;
+        }
+      } catch(e) {}
+    }
+
+    // 6. General comparison fallback
+    if (expectedStr) {
+      return `Value mismatch. The check expected \`${expectedStr}\`, but got \`${actualStr}\`. Check your calculation or variable assignments.`;
+    }
+
+    return `The check did not pass. Target condition: "${check.msg}". Double check your logic.`;
+  }
+
+  function generateSqlSmartFeedback(check, code) {
+    if (check.passed) return "";
+    
+    const msg = (check.msg || "").toLowerCase();
+    const actual = check.actual || "";
+    const expected = check.expected || "";
+    
+    if (msg.includes("columns") || msg.includes("column")) {
+      return `Your SELECT query is returning the wrong columns. Expected: \`${expected}\`, but query returned: \`${actual}\`. Check if you used \`SELECT * \` instead of specific column names, or if you have a typo.`;
+    }
+    if (msg.includes("rows") || msg.includes("row count") || msg.includes("exactly")) {
+      return `Row count mismatch. The challenge expects exactly \`${expected}\`, but your query returned \`${actual}\`. Check your \`WHERE\` clause or filter conditions.`;
+    }
+    
+    return `The query executed successfully, but did not satisfy the condition: "${check.msg}". Expected state: \`${expected}\`. Actual: \`${actual}\`.`;
+  }
 
   let activeTab = $state('console'); // 'console' | 'table-data' | 'visuals'
   let activeTablePreview = $state('');
@@ -389,6 +503,19 @@
         </div>
       {:else}
         <div class="output-content">
+          <!-- Executed Code Snippet Block -->
+          {#if executedCode}
+            <div class="executed-code-block">
+              <div class="code-block-header">
+                <span class="header-dot red"></span>
+                <span class="header-dot yellow"></span>
+                <span class="header-dot green"></span>
+                <span class="header-label">Executed Code ({type === 'python' ? 'Python 3' : 'SQLite'})</span>
+              </div>
+              <pre class="executed-code-content"><code>{executedCode}</code></pre>
+            </div>
+          {/if}
+
           <!-- Python specific output -->
           {#if type === 'python'}
             {#if error}
@@ -421,7 +548,7 @@
                         {/if}
                         <span class="check-msg">{ch.msg}</span>
                       </div>
-                      {#if !ch.passed && (ch.has_actual || ch.has_expected || ch.error_detail)}
+                      {#if !ch.passed}
                         <div class="check-details-box">
                           {#if ch.error_type && ch.error_type !== 'AssertionError'}
                             <div class="detail-row">
@@ -441,6 +568,12 @@
                               </div>
                             </div>
                           {/if}
+                          <div class="smart-feedback-box">
+                            <span class="feedback-icon">💡</span>
+                            <div class="feedback-text">
+                              {generateSmartFeedback(ch, type, executedCode)}
+                            </div>
+                          </div>
                         </div>
                       {/if}
                     </div>
@@ -533,6 +666,28 @@
                           {/if}
                           <span class="check-msg">{ch.msg}</span>
                         </div>
+                        {#if !ch.passed}
+                          <div class="check-details-box">
+                            {#if ch.has_expected || ch.has_actual}
+                              <div class="diff-split-container">
+                                <div class="diff-pane expected-pane">
+                                  <div class="pane-header">Expected Value</div>
+                                  <pre class="pane-code"><code>{ch.expected !== null && ch.expected !== undefined ? ch.expected : 'None'}</code></pre>
+                                </div>
+                                <div class="diff-pane actual-pane">
+                                  <div class="pane-header">Actual Returned</div>
+                                  <pre class="pane-code"><code>{ch.actual !== null && ch.actual !== undefined ? ch.actual : 'None'}</code></pre>
+                                </div>
+                              </div>
+                            {/if}
+                            <div class="smart-feedback-box">
+                              <span class="feedback-icon">💡</span>
+                              <div class="feedback-text">
+                                {generateSqlSmartFeedback(ch, executedCode)}
+                              </div>
+                            </div>
+                          </div>
+                        {/if}
                       </div>
                     {/each}
                   </div>
@@ -1494,5 +1649,87 @@
 
   .actual-pane .pane-code {
     color: var(--color-error-text);
+  }
+
+  /* Executed Code Block styles */
+  .executed-code-block {
+    background: var(--color-editor-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    animation: visuals-fadeIn 0.25s ease-out;
+  }
+
+  .code-block-header {
+    display: flex;
+    align-items: center;
+    background: var(--color-tab-inactive);
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--color-hairline);
+    gap: 6px;
+  }
+
+  .header-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .header-dot.red { background: #ef4444; }
+  .header-dot.yellow { background: #f59e0b; }
+  .header-dot.green { background: #10b981; }
+
+  .header-label {
+    margin-left: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .executed-code-content {
+    margin: 0;
+    padding: 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-ink);
+    overflow-x: auto;
+    max-height: 120px;
+    background: #0f172a; /* Sleek dark terminal background */
+  }
+  
+  .executed-code-content code {
+    color: #e2e8f0;
+  }
+
+  /* Smart Feedback Box styles */
+  .smart-feedback-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: rgba(59, 130, 246, 0.08); /* Soft blue glow tint */
+    border: 1px dashed rgba(59, 130, 246, 0.3);
+    border-radius: var(--radius-xs);
+    animation: visuals-fadeIn 0.2s ease-out;
+  }
+
+  .feedback-icon {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .feedback-text {
+    font-family: var(--font-body);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--color-ink);
+    font-weight: 500;
+    text-align: left;
   }
 </style>
