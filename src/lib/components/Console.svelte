@@ -742,6 +742,7 @@
           explainRows={explainData} 
           tableNameList={tableList} 
           onExecuteQuery={onExecuteQuery} 
+          sqlQuery={rawQuery}
         />
       {/if}
     {:else if activeTab === 'visuals' && queryResult && queryResult.length > 0}

@@ -4,8 +4,79 @@
   let { 
     explainRows = [], // [{id, parent, detail}]
     tableNameList = [], // list of tables in schema
-    onExecuteQuery = null // callback to run queries like CREATE INDEX
+    onExecuteQuery = null, // callback to run queries like CREATE INDEX
+    sqlQuery = '' // the active SQL query (Item 151)
   } = $props();
+
+  // Simple regex column extractor for index recommendations (Item 151)
+  function getSuggestedColumns(sql, table) {
+    if (!sql) return ['id'];
+    const lowerSql = sql.toLowerCase().replace(/\s+/g, ' ');
+    const lowerTable = table.toLowerCase();
+    
+    const suggested = new Set();
+    
+    // 1. Try to find JOIN conditions: ON t1.col = t2.col or similar
+    const joinOnMatches = lowerSql.matchAll(/on\s+([\w.]+)\s*=\s*([\w.]+)/g);
+    for (const match of joinOnMatches) {
+      const p1 = match[1];
+      const p2 = match[2];
+      
+      if (p1.startsWith(lowerTable + '.')) {
+        suggested.add(p1.split('.')[1]);
+      } else if (!p1.includes('.') && (lowerSql.includes(`join ${lowerTable}`) || lowerSql.includes(`from ${lowerTable}`))) {
+        if (isNaN(p1) && !p1.startsWith("'") && !p1.startsWith('"')) suggested.add(p1);
+      }
+      
+      if (p2.startsWith(lowerTable + '.')) {
+        suggested.add(p2.split('.')[1]);
+      } else if (!p2.includes('.') && (lowerSql.includes(`join ${lowerTable}`) || lowerSql.includes(`from ${lowerTable}`))) {
+        if (isNaN(p2) && !p2.startsWith("'") && !p2.startsWith('"')) suggested.add(p2);
+      }
+    }
+    
+    // 2. Try to find WHERE conditions
+    const whereMatch = lowerSql.match(/where\s+(.+?)(?:group\s+by|order\s+by|limit|$)/);
+    if (whereMatch) {
+      const whereClause = whereMatch[1];
+      const operators = ['=', '<', '>', '!=', '<=', '>=', '\\s+like\\s+', '\\s+in\\s+', '\\s+is\\s+'];
+      operators.forEach(op => {
+        const regex = new RegExp(`(?:([\\w.]+)\\s*${op})|(?:${op}\\s*([\\w.]+))`, 'g');
+        const matches = whereClause.matchAll(regex);
+        for (const match of matches) {
+          const col = match[1] || match[2];
+          if (col) {
+            const cleanCol = col.trim();
+            if (cleanCol.startsWith(lowerTable + '.')) {
+              suggested.add(cleanCol.split('.')[1]);
+            } else if (!cleanCol.includes('.') && isNaN(cleanCol) && !cleanCol.startsWith("'") && !cleanCol.startsWith('"')) {
+              suggested.add(cleanCol);
+            }
+          }
+        }
+      });
+    }
+
+    // 3. Try to find GROUP BY columns
+    const groupByMatch = lowerSql.match(/group\s+by\s+(.+?)(?:order\s+by|limit|$)/);
+    if (groupByMatch) {
+      const cols = groupByMatch[1].split(',');
+      cols.forEach(col => {
+        const cleanCol = col.trim();
+        if (cleanCol.startsWith(lowerTable + '.')) {
+          suggested.add(cleanCol.split('.')[1]);
+        } else if (!cleanCol.includes('.') && isNaN(cleanCol) && !cleanCol.startsWith("'") && !cleanCol.startsWith('"')) {
+          suggested.add(cleanCol);
+        }
+      });
+    }
+    
+    const validCols = Array.from(suggested).filter(c => {
+      return c && c !== 'null' && c !== 'true' && c !== 'false' && /^[a-z_][a-z0-9_]*$/.test(c);
+    });
+    
+    return validCols.length > 0 ? validCols : ['id'];
+  }
 
   // Parse linear explain rows into a tree structure
   let rootNodes = $derived.by(() => {
@@ -35,7 +106,7 @@
     return roots;
   });
 
-  // Evaluate query plan to find tables scanned and recommend indexes
+  // Evaluate query plan to find tables scanned and recommend indexes (Item 151)
   let recommendations = $derived.by(() => {
     const recs = [];
     explainRows.forEach(row => {
@@ -45,11 +116,15 @@
         const match = row.detail.match(/SCAN TABLE (\w+)/i);
         if (match && match[1]) {
           const tbl = match[1];
+          const cols = getSuggestedColumns(sqlQuery, tbl);
+          const colsStr = cols.join(', ');
+          
           recs.push({
             type: 'warning',
             text: `Full Table Scan detected on "${tbl}". For larger datasets, this causes slow linear searches.`,
             table: tbl,
-            suggestion: `Consider creating an index on the columns used in your WHERE or JOIN clauses for table "${tbl}".`
+            columns: cols,
+            suggestion: `Consider creating an index on column(s) "${colsStr}" for table "${tbl}" to optimize this lookup path.`
           });
         }
       }
@@ -65,11 +140,13 @@
     return 'node-normal';
   }
 
-  // Create mock index to simulate optimizer (Item 163)
-  async function simulateCreateIndex(tbl) {
-    if (!onExecuteQuery) return;
-    const idxName = `idx_${tbl}_custom_${Math.floor(Math.random() * 1000)}`;
-    const query = `CREATE INDEX ${idxName} ON ${tbl} (${tableNameList.includes(tbl) ? 'id' : 'customer_id'});`;
+  // Create composite/column index dynamically based on suggestions (Item 152)
+  async function simulateCreateIndex(tbl, columns) {
+    if (!onExecuteQuery || !columns || columns.length === 0) return;
+    const colsStr = columns.join(', ');
+    const colsSlug = columns.join('_');
+    const idxName = `idx_${tbl}_${colsSlug}_${Math.floor(Math.random() * 1000)}`;
+    const query = `CREATE INDEX ${idxName} ON ${tbl} (${colsStr});`;
     
     const outcome = await onExecuteQuery(query);
     if (outcome.success) {
@@ -150,8 +227,8 @@
               <span class="rec-warning-text">{rec.text}</span>
               <span class="rec-suggestion">{rec.suggestion}</span>
               {#if onExecuteQuery}
-                <button class="opt-btn" onclick={() => simulateCreateIndex(rec.table)}>
-                  ⚡ Auto-create Index on {rec.table}
+                <button class="opt-btn" onclick={() => simulateCreateIndex(rec.table, rec.columns)}>
+                  ⚡ Auto-create Index on {rec.table} ({rec.columns.join(', ')})
                 </button>
               {/if}
             </div>
