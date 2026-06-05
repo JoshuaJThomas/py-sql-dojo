@@ -265,6 +265,7 @@
   }
 
   function startChallenge(id, lang) {
+    language.set(lang);
     if (lang === 'python') {
       const idx = pythonExercises.findIndex(ex => ex.id === id);
       if (idx !== -1) {

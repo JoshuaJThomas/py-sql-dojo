@@ -9,6 +9,7 @@
   let { 
     challengeId = 'sandbox',
     language = 'python',
+    starterCode = '',
     onNotebookCodeChange = null // callback when notebook code is updated
   } = $props();
 
@@ -16,37 +17,47 @@
   let cells = $state([]);
   let activeEditCellId = $state(null);
 
-  // Load notebook state from localStorage or initialize with starter code
-  onMount(() => {
+  // Track the last loaded state to prevent overwrite during race conditions
+  let loadedChallengeId = $state(null);
+  let loadedLanguage = $state(null);
+
+  // Load cells reactively when challengeId or language changes
+  $effect(() => {
     const key = `dojo_notebook_${challengeId}_${language}`;
     const saved = localStorage.getItem(key);
     if (saved) {
       try {
         cells = JSON.parse(saved);
+        loadedChallengeId = challengeId;
+        loadedLanguage = language;
         return;
       } catch (e) {
         console.error("Error parsing saved notebook: ", e);
       }
     }
-    // Initialize with a single code cell
+    
+    // Initialize with a cell containing the active challenge's code/starter code
     cells = [
       {
-        id: 'cell-' + Date.now(),
+        id: 'cell-' + Date.now() + Math.random().toString(36).substr(2, 5),
         type: 'code',
-        content: language === 'python' 
+        content: starterCode || (language === 'python' 
           ? '# Write your python notebook cell here\nimport numpy as np\narr = np.array([1, 2, 3, 4])\nprint("Array multiplied by 3:")\narr * 3'
-          : '-- Write your SQL query here\nSELECT * FROM employees LIMIT 3;\n',
+          : '-- Write your SQL query here\nSELECT * FROM employees LIMIT 3;\n'),
         output: '',
         error: '',
         resultRepr: '',
         isRunning: false
       }
     ];
+    loadedChallengeId = challengeId;
+    loadedLanguage = language;
   });
 
   // Save to localStorage and update single-string workspace code when cells change
   $effect(() => {
-    if (cells.length > 0) {
+    // Only save and update when cells correspond to the currently loaded challenge & language
+    if (loadedChallengeId === challengeId && loadedLanguage === language && cells.length > 0) {
       const key = `dojo_notebook_${challengeId}_${language}`;
       localStorage.setItem(key, JSON.stringify(cells));
       
