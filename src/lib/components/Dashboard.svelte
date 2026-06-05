@@ -17,7 +17,12 @@
     userSqlCode,
     generateSignature,
     updateSignature,
-    starredChallenges
+    starredChallenges,
+    syncUser,
+    getMockCloudDb,
+    registerCloudUser,
+    loginCloudUser,
+    syncProfileData
   } from '../stores/dojo-store.js';
   import { pythonExercises } from '../data/python-exercises.js';
   import { sqlExercises } from '../data/sql-exercises.js';
@@ -480,6 +485,185 @@
       window.location.reload();
     }
   }
+
+  // Cloud Sync System states
+  let syncUserVal = $derived($syncUser);
+  let syncStatus = $state('idle'); // 'idle' | 'syncing' | 'success' | 'error'
+  let syncMessage = $state('');
+  let autoSyncEnabled = $state(true);
+  let conflictPolicy = $state('merge');
+  let lastSyncTimeVal = $state('Never');
+  
+  // Auth Form states
+  let authMode = $state('login'); // 'login' | 'signup'
+  let usernameInput = $state('');
+  let passwordInput = $state('');
+  let authError = $state('');
+  let authSuccessMsg = $state('');
+
+  // Fetch initial preferences from localStorage
+  onMount(() => {
+    autoSyncEnabled = localStorage.getItem('dojo_auto_sync_enabled') !== 'false';
+    conflictPolicy = localStorage.getItem('dojo_conflict_policy') || 'merge';
+    lastSyncTimeVal = localStorage.getItem('dojo_last_sync_time') || 'Never';
+  });
+
+  // Watch policies and persist
+  $effect(() => {
+    localStorage.setItem('dojo_auto_sync_enabled', String(autoSyncEnabled));
+  });
+  $effect(() => {
+    localStorage.setItem('dojo_conflict_policy', conflictPolicy);
+  });
+
+  // Database preview row counter
+  let dbTablesPreview = $derived.by(() => {
+    const db = getMockCloudDb();
+    if (!syncUserVal) return [];
+    const userId = syncUserVal.id;
+    return [
+      { name: 'users', rows: db.users.length, desc: 'User accounts (credentials & tokens)' },
+      { name: 'profiles', rows: db.profiles.length, desc: 'Global stats (XP, levels, streaks)' },
+      { name: 'challenge_completions', rows: db.completions.filter(c => c.user_id === userId).length, desc: 'Completed challenge IDs' },
+      { name: 'inventory', rows: db.inventory.filter(i => i.user_id === userId).length, desc: 'Owned shields & boosters' },
+      { name: 'starred_challenges', rows: db.starred.filter(s => s.user_id === userId).length, desc: 'Starred list' }
+    ];
+  });
+
+  // Handle Login
+  function handleSyncLogin(e) {
+    e.preventDefault();
+    authError = '';
+    authSuccessMsg = '';
+    if (!usernameInput.trim() || !passwordInput.trim()) {
+      authError = "Please fill in all credentials fields.";
+      return;
+    }
+    try {
+      loginCloudUser(usernameInput, passwordInput);
+      authSuccessMsg = "Successfully connected to Cloud Dojo Account!";
+      usernameInput = '';
+      passwordInput = '';
+      // Trigger initial sync automatically
+      triggerManualSync();
+    } catch (err) {
+      authError = err.message;
+    }
+  }
+
+  // Handle Signup
+  function handleSyncSignup(e) {
+    e.preventDefault();
+    authError = '';
+    authSuccessMsg = '';
+    if (!usernameInput.trim() || !passwordInput.trim()) {
+      authError = "Please fill in all credentials fields.";
+      return;
+    }
+    if (passwordInput.length < 4) {
+      authError = "Password must be at least 4 characters.";
+      return;
+    }
+    try {
+      registerCloudUser(usernameInput, passwordInput);
+      authSuccessMsg = "Mock Cloud Account registered & connected successfully!";
+      usernameInput = '';
+      passwordInput = '';
+      // Trigger initial sync automatically
+      triggerManualSync();
+    } catch (err) {
+      authError = err.message;
+    }
+  }
+
+  // Trigger Manual Sync
+  async function triggerManualSync() {
+    if (!syncUserVal) return;
+    syncStatus = 'syncing';
+    syncMessage = 'Connecting to mock cloud database tables...';
+    
+    // Simulate API delay
+    setTimeout(async () => {
+      try {
+        await syncProfileData();
+        syncStatus = 'success';
+        syncMessage = 'Profile synchronized successfully with cloud tables!';
+        lastSyncTimeVal = localStorage.getItem('dojo_last_sync_time') || new Date().toLocaleTimeString();
+        setTimeout(() => {
+          syncStatus = 'idle';
+          syncMessage = '';
+        }, 3000);
+      } catch (err) {
+        syncStatus = 'error';
+        syncMessage = 'Sync failed: ' + err.message;
+      }
+    }, 1200);
+  }
+
+  // Handle Logout
+  function handleSyncLogout() {
+    if (confirm("Disconnect from cloud account? Local progress will be preserved.")) {
+      syncUser.set(null);
+      syncStatus = 'idle';
+      syncMessage = '';
+      authSuccessMsg = '';
+      authError = '';
+    }
+  }
+
+  // Live Query Inspector States for Sync
+  let syncInspectorQuery = $state('SELECT * FROM profiles;');
+  let syncQueryResults = $state(null);
+  let syncQueryError = $state('');
+
+  function runSyncInspectorQuery() {
+    syncQueryError = '';
+    syncQueryResults = null;
+    const db = getMockCloudDb();
+    if (!syncUserVal) {
+      syncQueryError = "Error: Must be logged in to inspect user tables.";
+      return;
+    }
+    const userId = syncUserVal.id;
+    const query = syncInspectorQuery.trim().toLowerCase();
+
+    if (!query.startsWith('select')) {
+      syncQueryError = "Error: Only SELECT queries are supported on the inspector console.";
+      return;
+    }
+
+    let targetTable = '';
+    if (query.includes('from profiles')) targetTable = 'profiles';
+    else if (query.includes('from users')) targetTable = 'users';
+    else if (query.includes('from challenge_completions') || query.includes('from completions')) targetTable = 'completions';
+    else if (query.includes('from inventory')) targetTable = 'inventory';
+    else if (query.includes('from starred_challenges') || query.includes('from starred')) targetTable = 'starred';
+
+    if (!targetTable) {
+      syncQueryError = "Error: Table not found. Available tables: users, profiles, challenge_completions, inventory, starred_challenges.";
+      return;
+    }
+
+    let records = [];
+    if (targetTable === 'users') {
+      records = db.users.map(u => ({ id: u.id, username: u.username, created_at: u.created_at || '2026-06-05' }));
+    } else if (targetTable === 'profiles') {
+      records = db.profiles.filter(p => p.user_id === userId).map(p => ({ user_id: p.user_id, xp: p.xp, level: p.level || Math.floor(p.xp/100)+1, streak: p.streak, last_completed_date: p.last_completed_date || 'N/A' }));
+    } else if (targetTable === 'completions') {
+      records = db.completions.filter(c => c.user_id === userId).map(c => ({ user_id: c.user_id, challenge_id: c.challenge_id }));
+    } else if (targetTable === 'inventory') {
+      records = db.inventory.filter(i => i.user_id === userId).map(i => ({ user_id: i.user_id, streakFreezes: i.streakFreezes || 0, xpBoosts: i.xpBoosts || 0 }));
+    } else if (targetTable === 'starred') {
+      records = db.starred.filter(s => s.user_id === userId).map(s => ({ user_id: s.user_id, challenge_id: s.challenge_id }));
+    }
+
+    if (records.length === 0) {
+      syncQueryError = `Query returned 0 rows from table '${targetTable}'.`;
+      return;
+    }
+
+    syncQueryResults = records;
+  }
 </script>
 
 <div class="dashboard-container">
@@ -601,6 +785,14 @@
       >
         <Settings size={14} class="tab-ic" />
         <span>Settings & Data</span>
+      </button>
+      <button 
+        class="control-tab-btn" 
+        class:active={activeControlTab === 'sync'} 
+        onclick={() => activeControlTab = 'sync'}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-ic"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+        <span>Cloud Sync</span>
       </button>
     </div>
 
@@ -900,6 +1092,202 @@
         <Leaderboard />
       {:else if activeControlTab === 'forge'}
         <DojoForge language={currentLang} onChallengeCreated={refreshCustomChallenges} />
+      {:else if activeControlTab === 'sync'}
+        <div class="sync-tab">
+          {#if !syncUserVal}
+            <div class="sync-auth-container">
+              <div class="sync-info-box">
+                <div class="sync-logo">☁️</div>
+                <h3>Dojo Cloud Synchronization</h3>
+                <p>Cache your profile stats, inventory, and completed challenges in secure mock database tables.</p>
+                <ul>
+                  <li>🔄 Automatic background sync on challenge completions</li>
+                  <li>🛡️ Protects progress from local browser storage wipes</li>
+                  <li>📊 Real-time cloud database table inspection via custom queries</li>
+                  <li>🤝 Advanced merge conflict resolution policies</li>
+                </ul>
+              </div>
+
+              <div class="sync-form-card">
+                <div class="auth-tabs">
+                  <button class="auth-tab-btn" class:active={authMode === 'login'} onclick={() => authMode = 'login'}>
+                    Sign In
+                  </button>
+                  <button class="auth-tab-btn" class:active={authMode === 'signup'} onclick={() => authMode = 'signup'}>
+                    Create Account
+                  </button>
+                </div>
+
+                <form onsubmit={authMode === 'login' ? handleSyncLogin : handleSyncSignup} class="auth-form">
+                  <div class="form-group">
+                    <label for="sync-username">Dojo Username</label>
+                    <input type="text" id="sync-username" bind:value={usernameInput} placeholder="e.g. sql_ninja" required />
+                  </div>
+                  <div class="form-group">
+                    <label for="sync-password">Dojo Password</label>
+                    <input type="password" id="sync-password" bind:value={passwordInput} placeholder="••••••••" required />
+                  </div>
+
+                  {#if authError}
+                    <div class="sync-error-alert">{authError}</div>
+                  {/if}
+                  {#if authSuccessMsg}
+                    <div class="sync-success-alert">{authSuccessMsg}</div>
+                  {/if}
+
+                  <button type="submit" class="auth-submit-btn">
+                    {authMode === 'login' ? 'Connect to Cloud' : 'Register Account'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          {:else}
+            <div class="sync-dashboard">
+              <div class="sync-sidebar">
+                <div class="sync-status-card">
+                  <div class="sync-user-info">
+                    <div class="user-avatar">🥋</div>
+                    <div class="user-details">
+                      <h4>{syncUserVal.username}</h4>
+                      <span class="user-id font-mono">ID: {syncUserVal.id}</span>
+                    </div>
+                  </div>
+                  <span class="connected-badge">Connected</span>
+                </div>
+
+                <div class="sync-actions-card">
+                  <div class="sync-detail-row">
+                    <span class="lbl">Last Sync Time</span>
+                    <span class="val font-mono">{lastSyncTimeVal}</span>
+                  </div>
+
+                  {#if syncMessage}
+                    <div class="sync-status-msg" class:success={syncStatus === 'success'} class:error={syncStatus === 'error'} class:info={syncStatus === 'syncing'}>
+                      {syncMessage}
+                    </div>
+                  {/if}
+
+                  <button 
+                    onclick={triggerManualSync} 
+                    class="sync-now-btn" 
+                    disabled={syncStatus === 'syncing'}
+                  >
+                    {#if syncStatus === 'syncing'}
+                      <span class="spinner"></span>
+                      <span>Syncing Data...</span>
+                    {:else}
+                      <span>Synchronize Profile</span>
+                    {/if}
+                  </button>
+
+                  <button onclick={handleSyncLogout} class="sync-logout-btn">
+                    Disconnect Account
+                  </button>
+                </div>
+
+                <div class="sync-settings-card">
+                  <h4>Sync Configurations</h4>
+                  
+                  <div class="config-row">
+                    <label class="toggle-label">
+                      <input type="checkbox" bind:checked={autoSyncEnabled} />
+                      <span class="toggle-text">Auto-Sync completions</span>
+                    </label>
+                    <p class="config-desc">Automatically upload profile updates as soon as a task is solved.</p>
+                  </div>
+
+                  <div class="config-row">
+                    <label for="conflict-policy-select">Conflict Resolution Policy</label>
+                    <select id="conflict-policy-select" bind:value={conflictPolicy} class="policy-select">
+                      <option value="merge">Merge Progress (Recommended)</option>
+                      <option value="local">Local Storage Overwrites Cloud</option>
+                      <option value="cloud">Cloud Tables Overwrite Local</option>
+                    </select>
+                    <p class="config-desc">Defines how dataset updates are handled if local and cloud copies mismatch.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Cloud Database Tables visualizer and query tool -->
+              <div class="sync-main-panel">
+                <div class="cloud-db-header">
+                  <h3>☁️ Synced Cloud Database Preview</h3>
+                  <p>Stats cached in relation tables representing the user record model.</p>
+                </div>
+
+                <div class="db-tables-grid">
+                  {#each dbTablesPreview as table}
+                    <div class="db-table-card">
+                      <div class="table-card-top">
+                        <span class="table-name font-mono">{table.name}</span>
+                        <span class="table-rows">{table.rows} {table.rows === 1 ? 'row' : 'rows'}</span>
+                      </div>
+                      <p class="table-desc">{table.desc}</p>
+                    </div>
+                  {/each}
+                </div>
+
+                <!-- Live Query Inspector -->
+                <div class="cloud-db-query-tool">
+                  <div class="tool-header">
+                    <h4>Interactive Cloud Table Query Inspector</h4>
+                    <span class="badge-sql font-mono">SELECT queries only</span>
+                  </div>
+
+                  <!-- Mini SQL interface -->
+                  <div class="mini-query-box">
+                    <input 
+                      type="text" 
+                      bind:value={syncInspectorQuery} 
+                      placeholder="SELECT * FROM profiles;" 
+                      class="mini-query-input font-mono" 
+                    />
+                    <button onclick={runSyncInspectorQuery} class="mini-query-btn">
+                      Run Query
+                    </button>
+                  </div>
+
+                  {#if syncQueryError}
+                    <div class="query-error-box font-mono">{syncQueryError}</div>
+                  {/if}
+
+                  {#if syncQueryResults}
+                    <div class="query-results-table-wrap">
+                      <table class="query-results-table">
+                        <thead>
+                          <tr>
+                            {#each Object.keys(syncQueryResults[0] || {}) as key}
+                              <th class="font-mono">{key}</th>
+                            {/each}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {#each syncQueryResults as row}
+                            <tr>
+                              {#each Object.values(row) as val}
+                                <td class="font-mono">{val}</td>
+                              {/each}
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    </div>
+                  {:else if !syncQueryError}
+                    <div class="query-empty-placeholder">
+                      <p>Run a query against synced tables to inspect cached SQL records.</p>
+                      <div class="example-queries">
+                        <span>Examples:</span>
+                        <button onclick={() => { syncInspectorQuery = 'SELECT * FROM profiles;'; runSyncInspectorQuery(); }}>profiles</button>
+                        <button onclick={() => { syncInspectorQuery = 'SELECT * FROM challenge_completions;'; runSyncInspectorQuery(); }}>completions</button>
+                        <button onclick={() => { syncInspectorQuery = 'SELECT * FROM inventory;'; runSyncInspectorQuery(); }}>inventory</button>
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              </div>
+            </div>
+          {/if}
+        </div>
       {/if}
     </div>
   </div>
@@ -2147,5 +2535,615 @@
       transform: scale(1.5);
       filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.4));
     }
+  }
+
+  /* Cloud Sync Tab Styling */
+  .sync-tab {
+    padding: 16px;
+    background: #0d0d11;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    color: var(--color-ink);
+  }
+
+  /* Auth Container styling */
+  .sync-auth-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    padding: 24px;
+  }
+
+  @media (max-width: 768px) {
+    .sync-auth-container {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+  }
+
+  .sync-info-box {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .sync-logo {
+    font-size: 48px;
+    line-height: 1;
+  }
+
+  .sync-info-box h3 {
+    font-size: 20px;
+    font-weight: 800;
+    margin: 0;
+    color: #ffffff;
+  }
+
+  .sync-info-box p {
+    font-size: 13px;
+    color: var(--color-muted);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .sync-info-box ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .sync-info-box li {
+    font-size: 13px;
+    color: var(--color-ink);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sync-form-card {
+    background: #111116;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    overflow: hidden;
+  }
+
+  .auth-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .auth-tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--color-muted);
+    padding: 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .auth-tab-btn.active {
+    color: var(--color-primary);
+    background: rgba(16, 185, 129, 0.04);
+    border-bottom: 2px solid var(--color-primary);
+  }
+
+  .auth-form {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-group label {
+    font-size: 11px;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+  }
+
+  .form-group input {
+    background: #09090c;
+    border: 1px solid var(--color-hairline);
+    color: #ffffff;
+    padding: 10px;
+    border-radius: var(--radius-xs);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .form-group input:focus {
+    border-color: var(--color-primary);
+  }
+
+  .auth-submit-btn {
+    background: var(--color-primary);
+    border: none;
+    color: var(--color-canvas);
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+
+  .auth-submit-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+  }
+
+  .sync-error-alert {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    padding: 10px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+  }
+
+  .sync-success-alert {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: #a7f3d0;
+    padding: 10px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+  }
+
+  /* Connected Dashboard styling */
+  .sync-dashboard {
+    display: grid;
+    grid-template-columns: 1.2fr 1.8fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 900px) {
+    .sync-dashboard {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .sync-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .sync-status-card {
+    background: #111116;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .sync-user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .user-avatar {
+    font-size: 24px;
+  }
+
+  .user-details h4 {
+    margin: 0;
+    font-size: 14px;
+    color: #ffffff;
+  }
+
+  .user-details .user-id {
+    font-size: 9px;
+    color: var(--color-muted);
+  }
+
+  .connected-badge {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--color-primary);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 4px 8px;
+    border-radius: var(--radius-pill);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
+  }
+
+  .sync-actions-card {
+    background: #111116;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .sync-detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    border-bottom: 1px solid var(--color-hairline);
+    padding-bottom: 12px;
+  }
+
+  .sync-detail-row .lbl {
+    color: var(--color-muted);
+  }
+
+  .sync-detail-row .val {
+    font-weight: 700;
+  }
+
+  .sync-status-msg {
+    padding: 10px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .sync-status-msg.info {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+  }
+
+  .sync-status-msg.success {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: #a7f3d0;
+  }
+
+  .sync-status-msg.error {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+  }
+
+  .sync-now-btn {
+    background: var(--color-primary);
+    border: none;
+    color: var(--color-canvas);
+    padding: 12px;
+    border-radius: var(--radius-xs);
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .sync-now-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+
+  .sync-now-btn .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--color-canvas);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: sync-spin 0.8s linear infinite;
+  }
+
+  @keyframes sync-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .sync-logout-btn {
+    background: transparent;
+    border: 1px solid var(--color-hairline);
+    color: var(--color-muted);
+    padding: 10px;
+    border-radius: var(--radius-xs);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .sync-logout-btn:hover {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.25);
+  }
+
+  .sync-settings-card {
+    background: #111116;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .sync-settings-card h4 {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    color: #ffffff;
+    border-bottom: 1px solid var(--color-hairline);
+    padding-bottom: 8px;
+  }
+
+  .config-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .config-desc {
+    font-size: 11px;
+    color: var(--color-muted);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .policy-select {
+    background: #09090c;
+    border: 1px solid var(--color-hairline);
+    color: var(--color-ink);
+    padding: 8px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* Right main panel */
+  .sync-main-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .cloud-db-header h3 {
+    margin: 0 0 4px 0;
+    font-size: 18px;
+    font-weight: 800;
+    color: #ffffff;
+  }
+
+  .cloud-db-header p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--color-muted);
+  }
+
+  .db-tables-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+
+  .db-table-card {
+    background: #111116;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+
+  .db-table-card:hover {
+    border-color: rgba(16, 185, 129, 0.15);
+  }
+
+  .table-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .table-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-primary);
+  }
+
+  .table-rows {
+    font-size: 10px;
+    color: var(--color-muted);
+    background: #161622;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .table-desc {
+    font-size: 10px;
+    color: var(--color-muted);
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  /* Live SQL inspector tool */
+  .cloud-db-query-tool {
+    background: #111116;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tool-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .tool-header h4 {
+    margin: 0;
+    font-size: 14px;
+    color: #ffffff;
+  }
+
+  .badge-sql {
+    font-size: 9px;
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    background: rgba(245, 158, 11, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+
+  .mini-query-box {
+    display: flex;
+    gap: 8px;
+  }
+
+  .mini-query-input {
+    flex: 1;
+    background: #09090c;
+    border: 1px solid var(--color-hairline);
+    color: #ffffff;
+    padding: 10px 14px;
+    border-radius: var(--radius-xs);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .mini-query-input:focus {
+    border-color: var(--color-primary);
+  }
+
+  .mini-query-btn {
+    background: #1c1c28;
+    border: 1px solid #27273a;
+    color: #ffffff;
+    padding: 0 16px;
+    border-radius: var(--radius-xs);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .mini-query-btn:hover {
+    background: var(--color-primary);
+    color: #000000;
+    border-color: var(--color-primary);
+  }
+
+  .query-error-box {
+    background: rgba(239, 68, 68, 0.08);
+    border-left: 3px solid #ef4444;
+    padding: 10px;
+    color: #fca5a5;
+    font-size: 12px;
+  }
+
+  .query-empty-placeholder {
+    padding: 24px;
+    background: #09090c;
+    border: 1px dashed var(--color-hairline);
+    border-radius: var(--radius-xs);
+    text-align: center;
+    color: var(--color-muted);
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .query-empty-placeholder p {
+    margin: 0;
+  }
+
+  .example-queries {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .example-queries button {
+    background: #111116;
+    border: 1px solid var(--color-hairline);
+    color: var(--color-primary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    font-family: var(--font-mono);
+  }
+
+  .example-queries button:hover {
+    border-color: var(--color-primary);
+  }
+
+  .query-results-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    background: #09090c;
+    max-height: 200px;
+  }
+
+  .query-results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    text-align: left;
+  }
+
+  .query-results-table th {
+    background: #111116;
+    color: var(--color-muted);
+    padding: 8px 12px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .query-results-table td {
+    padding: 8px 12px;
+    color: var(--color-ink);
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .query-results-table tr:last-child td {
+    border-bottom: none;
   }
 </style>

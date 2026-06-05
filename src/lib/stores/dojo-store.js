@@ -354,7 +354,244 @@ export function completeChallenge(challengeId, isEasy) {
     }
 
     // Trigger achievement evaluations
-    return checkAchievements();
+    const newlyUnlocked = checkAchievements();
+
+    // Auto-sync if enabled
+    if (typeof window !== 'undefined' && localStorage.getItem('dojo_auto_sync_enabled') === 'true') {
+      const currentUser = get(syncUser);
+      if (currentUser) {
+        setTimeout(() => {
+          syncProfileData(true);
+        }, 500);
+      }
+    }
+
+    return newlyUnlocked;
   }
   return [];
+}
+
+// Cloud Sync stores and mock database implementation
+export const syncUser = writable(getStorageSanitized('sync_user', null, 'object'));
+syncUser.subscribe(val => setStorage('sync_user', val));
+
+// Mock cloud database database state
+export function getMockCloudDb() {
+  if (typeof window === 'undefined') return { users: [], profiles: [], completions: [], inventory: [], starred: [] };
+  const val = localStorage.getItem('dojo_mock_cloud_db');
+  if (!val) {
+    // Seed database with some dummy entries for visual preview
+    const db = {
+      users: [
+        { id: 'u_wizard', username: 'sql_sorcerer', password: 'password123', created_at: new Date().toISOString() },
+        { id: 'u_pandas', username: 'pandas_expert', password: 'password123', created_at: new Date().toISOString() }
+      ],
+      profiles: [
+        { user_id: 'u_wizard', xp: 1250, level: 13, streak: 5, last_completed_date: new Date().toDateString() },
+        { user_id: 'u_pandas', xp: 950, level: 10, streak: 3, last_completed_date: new Date().toDateString() }
+      ],
+      completions: [
+        { user_id: 'u_wizard', challenge_id: 'sql-basic-select' },
+        { user_id: 'u_wizard', challenge_id: 'sql-join-inner' },
+        { user_id: 'u_pandas', challenge_id: 'ch01-pandas-intro' }
+      ],
+      inventory: [
+        { user_id: 'u_wizard', streakFreezes: 2, xpBoosts: 1 },
+        { user_id: 'u_pandas', streakFreezes: 0, xpBoosts: 0 }
+      ],
+      starred: [
+        { user_id: 'u_wizard', challenge_id: 'sql-basic-select' }
+      ]
+    };
+    localStorage.setItem('dojo_mock_cloud_db', JSON.stringify(db));
+    return db;
+  }
+  try {
+    return JSON.parse(val);
+  } catch (e) {
+    return { users: [], profiles: [], completions: [], inventory: [], starred: [] };
+  }
+}
+
+export function saveMockCloudDb(db) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('dojo_mock_cloud_db', JSON.stringify(db));
+  }
+}
+
+// Signup function
+export function registerCloudUser(username, password) {
+  const db = getMockCloudDb();
+  const exists = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+  if (exists) {
+    throw new Error("Username is already taken in mock cloud database.");
+  }
+  const newUser = {
+    id: 'u_' + Math.random().toString(36).substr(2, 9),
+    username,
+    password,
+    created_at: new Date().toISOString()
+  };
+  db.users.push(newUser);
+  
+  // Create initial profile
+  db.profiles.push({
+    user_id: newUser.id,
+    xp: 0,
+    level: 1,
+    streak: 0,
+    last_completed_date: ''
+  });
+
+  saveMockCloudDb(db);
+  syncUser.set(newUser);
+  return newUser;
+}
+
+// Login function
+export function loginCloudUser(username, password) {
+  const db = getMockCloudDb();
+  const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+  if (!user || user.password !== password) {
+    throw new Error("Invalid username or password credentials.");
+  }
+  syncUser.set(user);
+  return user;
+}
+
+// Background / foreground sync function
+export async function syncProfileData(silent = false) {
+  const currentUser = get(syncUser);
+  if (!currentUser) return;
+
+  const db = getMockCloudDb();
+  const userId = currentUser.id;
+
+  // Retrieve cloud records
+  let cloudProfile = db.profiles.find(p => p.user_id === userId);
+  if (!cloudProfile) {
+    cloudProfile = { user_id: userId, xp: 0, level: 1, streak: 0, last_completed_date: '' };
+    db.profiles.push(cloudProfile);
+  }
+
+  const cloudCompletions = db.completions.filter(c => c.user_id === userId).map(c => c.challenge_id);
+  const cloudStarred = db.starred.filter(s => s.user_id === userId).map(s => s.challenge_id);
+  
+  let cloudInv = db.inventory.find(i => i.user_id === userId);
+  if (!cloudInv) {
+    cloudInv = { user_id: userId, streakFreezes: 0, xpBoosts: 0 };
+    db.inventory.push(cloudInv);
+  }
+
+  // Local values
+  const localXp = get(xp);
+  const localCompleted = get(completedChallenges);
+  const localStarred = get(starredChallenges) || [];
+  const localInv = get(inventory) || { streakFreezes: 0, xpBoosts: 0 };
+  const localStreak = get(streak);
+  const localLastDate = get(lastCompletedDate);
+
+  const policy = typeof window !== 'undefined' ? localStorage.getItem('dojo_conflict_policy') || 'merge' : 'merge';
+
+  if (policy === 'merge') {
+    // Merge completions (union)
+    const mergedCompleted = Array.from(new Set([...localCompleted, ...cloudCompletions]));
+    completedChallenges.set(mergedCompleted);
+
+    // Merge starred (union)
+    const mergedStarred = Array.from(new Set([...localStarred, ...cloudStarred]));
+    starredChallenges.set(mergedStarred);
+
+    // Merge XP (max)
+    const finalXp = Math.max(localXp, cloudProfile.xp);
+    xp.set(finalXp);
+
+    // Merge streak and inventory items
+    const finalStreak = Math.max(localStreak, cloudProfile.streak);
+    streak.set(finalStreak);
+
+    const finalInv = {
+      ...localInv,
+      streakFreezes: Math.max(localInv.streakFreezes || 0, cloudInv.streakFreezes || 0),
+      xpBoosts: Math.max(localInv.xpBoosts || 0, cloudInv.xpBoosts || 0)
+    };
+    inventory.set(finalInv);
+
+    const finalLastDate = localXp >= cloudProfile.xp ? localLastDate : cloudProfile.last_completed_date;
+    lastCompletedDate.set(finalLastDate);
+
+    // Write back to cloud database tables
+    cloudProfile.xp = finalXp;
+    cloudProfile.level = Math.floor(finalXp / 100) + 1;
+    cloudProfile.streak = finalStreak;
+    cloudProfile.last_completed_date = finalLastDate;
+    
+    cloudInv.streakFreezes = finalInv.streakFreezes;
+    cloudInv.xpBoosts = finalInv.xpBoosts;
+    if (localInv.hasLeaderboardFlair || cloudInv.hasLeaderboardFlair) {
+      cloudInv.hasLeaderboardFlair = true;
+      finalInv.hasLeaderboardFlair = true;
+    }
+    if (localInv.advancedCheatsUnlocked || cloudInv.advancedCheatsUnlocked) {
+      cloudInv.advancedCheatsUnlocked = true;
+      finalInv.advancedCheatsUnlocked = true;
+    }
+    inventory.set(finalInv);
+
+    // Clear and re-fill completions and starred cloud tables for user
+    db.completions = db.completions.filter(c => c.user_id !== userId);
+    mergedCompleted.forEach(id => {
+      db.completions.push({ user_id: userId, challenge_id: id });
+    });
+
+    db.starred = db.starred.filter(s => s.user_id !== userId);
+    mergedStarred.forEach(id => {
+      db.starred.push({ user_id: userId, challenge_id: id });
+    });
+
+  } else if (policy === 'local') {
+    // Local overwrites cloud
+    cloudProfile.xp = localXp;
+    cloudProfile.level = Math.floor(localXp / 100) + 1;
+    cloudProfile.streak = localStreak;
+    cloudProfile.last_completed_date = localLastDate;
+
+    cloudInv.streakFreezes = localInv.streakFreezes || 0;
+    cloudInv.xpBoosts = localInv.xpBoosts || 0;
+    cloudInv.hasLeaderboardFlair = localInv.hasLeaderboardFlair || false;
+    cloudInv.advancedCheatsUnlocked = localInv.advancedCheatsUnlocked || false;
+
+    db.completions = db.completions.filter(c => c.user_id !== userId);
+    localCompleted.forEach(id => {
+      db.completions.push({ user_id: userId, challenge_id: id });
+    });
+
+    db.starred = db.starred.filter(s => s.user_id !== userId);
+    localStarred.forEach(id => {
+      db.starred.push({ user_id: userId, challenge_id: id });
+    });
+
+  } else if (policy === 'cloud') {
+    // Cloud overwrites local
+    xp.set(cloudProfile.xp);
+    completedChallenges.set(cloudCompletions);
+    starredChallenges.set(cloudStarred);
+    streak.set(cloudProfile.streak);
+    lastCompletedDate.set(cloudProfile.last_completed_date);
+    
+    inventory.set({
+      ...localInv,
+      streakFreezes: cloudInv.streakFreezes,
+      xpBoosts: cloudInv.xpBoosts,
+      hasLeaderboardFlair: cloudInv.hasLeaderboardFlair || false,
+      advancedCheatsUnlocked: cloudInv.advancedCheatsUnlocked || false
+    });
+  }
+
+  saveMockCloudDb(db);
+  updateSignature();
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('dojo_last_sync_time', new Date().toLocaleTimeString());
+  }
 }
