@@ -71,6 +71,116 @@
     }
     return "";
   }
+
+  // Visual Schema Modeler: Card positions and drag-and-drop logic
+  let cardPositions = $state({});
+  let draggingTable = $state(null);
+  let dragStartOffset = { x: 0, y: 0 };
+  let diagramContainer = $state(null);
+  let connectorLines = $state([]);
+
+  function initPositions() {
+    if (typeof window === 'undefined') return;
+    const saved = localStorage.getItem('dojo_erd_positions');
+    let pos = {};
+    if (saved) {
+      try { pos = JSON.parse(saved); } catch (e) {}
+    }
+    
+    tableList.forEach((table, index) => {
+      if (!pos[table] || typeof pos[table].x !== 'number') {
+        const col = index % 3;
+        const row = Math.floor(index / 3);
+        pos[table] = {
+          x: 20 + col * 230,
+          y: 20 + row * 250
+        };
+      }
+    });
+    cardPositions = pos;
+  }
+
+  function handleMouseDown(event, tableName) {
+    if (event.button !== 0) return; // Left click only
+    draggingTable = tableName;
+    const pos = cardPositions[tableName] || { x: 0, y: 0 };
+    dragStartOffset = {
+      x: event.clientX - pos.x,
+      y: event.clientY - pos.y
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }
+
+  function handleMouseMove(event) {
+    if (!draggingTable) return;
+    const pos = cardPositions[draggingTable] || { x: 0, y: 0 };
+    cardPositions[draggingTable] = {
+      x: event.clientX - dragStartOffset.x,
+      y: event.clientY - dragStartOffset.y
+    };
+  }
+
+  function handleMouseUp() {
+    draggingTable = null;
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+    localStorage.setItem('dojo_erd_positions', JSON.stringify(cardPositions));
+  }
+
+  function updateConnectorLines() {
+    if (!diagramContainer) return;
+    const containerRect = diagramContainer.getBoundingClientRect();
+    
+    const lines = [];
+    relations.forEach(rel => {
+      const fromEl = document.getElementById(`col-node-${rel.from}-${rel.fromCol}`);
+      const toEl = document.getElementById(`col-node-${rel.to}-${rel.toCol}`);
+      if (fromEl && toEl) {
+        const fromRect = fromEl.getBoundingClientRect();
+        const toRect = toEl.getBoundingClientRect();
+
+        const fromLeft = fromRect.left - containerRect.left;
+        const fromRight = fromRect.right - containerRect.left;
+        const toLeft = toRect.left - containerRect.left;
+        const toRight = toRect.right - containerRect.left;
+
+        const y1 = (fromRect.top + fromRect.bottom) / 2 - containerRect.top;
+        const y2 = (toRect.top + toRect.bottom) / 2 - containerRect.top;
+
+        // Deciding which sides face each other to connect left/right elegantly
+        const x1 = fromRight < toLeft ? fromRight : fromLeft;
+        const x2 = fromRight < toLeft ? toLeft : toRight;
+
+        lines.push({
+          x1, y1, x2, y2,
+          fromTable: rel.from,
+          fromCol: rel.fromCol,
+          toTable: rel.to,
+          toCol: rel.toCol
+        });
+      }
+    });
+    connectorLines = lines;
+  }
+
+  $effect(() => {
+    if (tableList.length > 0) {
+      initPositions();
+    }
+  });
+
+  $effect(() => {
+    const pos = cardPositions;
+    const mode = viewMode;
+    const list = tableList;
+    const hoverCol = hoveredColumn;
+
+    const frame = requestAnimationFrame(() => {
+      updateConnectorLines();
+    });
+    return () => cancelAnimationFrame(frame);
+  });
 </script>
 
 <div class="schema-browser">
@@ -129,21 +239,47 @@
         {/each}
       </div>
     {:else}
-      <div class="diagram-grid">
+      <div 
+        bind:this={diagramContainer} 
+        class="diagram-sandbox" 
+        onscroll={updateConnectorLines}
+        role="presentation"
+      >
+        <svg class="diagram-svg-overlay">
+          {#each connectorLines as line}
+            {@const isHovered = (hoveredColumn && hoveredColumn.table === line.fromTable && hoveredColumn.name === line.fromCol) || (hoveredColumn && hoveredColumn.table === line.toTable && hoveredColumn.name === line.toCol)}
+            <path 
+              d="M {line.x1} {line.y1} C {(line.x1 + line.x2) / 2} {line.y1}, {(line.x1 + line.x2) / 2} {line.y2}, {line.x2} {line.y2}" 
+              fill="none" 
+              stroke={isHovered ? 'var(--color-primary)' : 'rgba(59, 130, 246, 0.4)'} 
+              stroke-width={isHovered ? '2.5' : '1.5'}
+              style="transition: stroke 0.2s, stroke-width 0.2s;"
+            />
+          {/each}
+        </svg>
+
         {#each tableList as tableName}
+          {@const pos = cardPositions[tableName] || { x: 20, y: 20 }}
           <div 
-            class="diagram-card" 
+            class="diagram-card draggable-card" 
+            style="position: absolute; left: {pos.x}px; top: {pos.y}px; z-index: 10; margin: 0; width: 195px;"
             role="presentation"
             class:highlighted={hoveredTable === tableName || isRelatedTable(tableName)}
             onmouseenter={() => hoveredTable = tableName}
             onmouseleave={() => hoveredTable = null}
           >
-            <div class="diagram-card-header">
+            <div 
+              class="diagram-card-header drag-handle" 
+              onmousedown={(e) => handleMouseDown(e, tableName)}
+              role="presentation"
+              style="cursor: grab;"
+            >
               <span class="table-name">{tableName}</span>
             </div>
             <div class="diagram-columns">
               {#each schema[tableName] as col}
                 <div 
+                  id="col-node-{tableName}-{col.name}"
                   class="diagram-col-row"
                   role="presentation"
                   class:is-pk={col.pk}
@@ -492,5 +628,38 @@
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  .diagram-sandbox {
+    position: relative;
+    height: 520px;
+    overflow: auto;
+    background: var(--color-editor-bg);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    user-select: none;
+  }
+
+  .diagram-svg-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2000px;
+    height: 2000px;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  .draggable-card {
+    transition: box-shadow 0.2s, border-color 0.2s, opacity 0.2s;
+    user-select: none;
+  }
+
+  .drag-handle {
+    user-select: none;
+  }
+
+  .drag-handle:active {
+    cursor: grabbing !important;
   }
 </style>
