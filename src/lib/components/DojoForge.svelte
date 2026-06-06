@@ -148,13 +148,117 @@
     }
   }
 
-  // Export custom challenges JSON (Item 184)
-  function exportForgedChallenges() {
-    const blob = new Blob([JSON.stringify(customChallenges, null, 2)], { type: 'application/json' });
+  // CSV Serialization Helper
+  function convertToCsv(arr) {
+    const headers = ['id', 'chapter', 'topic', 'title', 'prompt', 'starterCode', 'hint', 'solution', 'difficulty', 'language', 'isCustom'];
+    const escapeCsvValue = (val) => {
+      if (val === null || val === undefined) return '""';
+      let str = String(val);
+      str = str.replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const csvRows = [
+      headers.join(','),
+      ...arr.map(row => {
+        return headers.map(header => escapeCsvValue(row[header])).join(',');
+      })
+    ];
+    return csvRows.join('\n');
+  }
+
+  // CSV Deserialization Helper
+  function parseCsv(csvText) {
+    const lines = [];
+    let row = [''];
+    let inQuotes = false;
+
+    for (let i = 0; i < csvText.length; i++) {
+      const char = csvText[i];
+      const nextChar = csvText[i + 1];
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          row[row.length - 1] += '"';
+          i++; // Skip next quote
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        row.push('');
+      } else if ((char === '\r' || char === '\n') && !inQuotes) {
+        if (char === '\r' && nextChar === '\n') {
+          i++; // Skip \n
+        }
+        lines.push(row);
+        row = [''];
+      } else {
+        row[row.length - 1] += char;
+      }
+    }
+    if (row.length > 1 || row[0] !== '') {
+      lines.push(row);
+    }
+
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].map(h => h.trim());
+    const data = [];
+
+    for (let r = 1; r < lines.length; r++) {
+      const line = lines[r];
+      if (line.length < headers.length) continue;
+      const obj = {};
+      headers.forEach((header, colIdx) => {
+        obj[header] = line[colIdx];
+      });
+      
+      // Parse fields back
+      if (obj.chapter) obj.chapter = Number(obj.chapter) || 1;
+      if (obj.isCustom) obj.isCustom = obj.isCustom === 'true';
+      if (obj.language === 'sql') {
+        obj.checks = [
+          {
+            rule: `(result) => result && result.length > 0`,
+            msg: "Query must return a result table"
+          }
+        ];
+      } else {
+        obj.checks = [
+          {
+            test: 'True',
+            msg: 'Compiled successfully'
+          }
+        ];
+      }
+      data.push(obj);
+    }
+    return data;
+  }
+
+  // Export custom challenges JSON/CSV (Item 184)
+  function exportForgedChallenges(format = 'json') {
+    if (customChallenges.length === 0) {
+      alert("No custom challenges forged yet to export!");
+      return;
+    }
+    let content = '';
+    let mimeType = 'application/json';
+    let fileExt = 'json';
+
+    if (format === 'csv') {
+      content = convertToCsv(customChallenges);
+      mimeType = 'text/csv';
+      fileExt = 'csv';
+    } else {
+      content = JSON.stringify(customChallenges, null, 2);
+    }
+
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `forged_challenges_${lang}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `forged_challenges_${lang}_${new Date().toISOString().slice(0, 10)}.${fileExt}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -164,14 +268,22 @@
   function importForgedChallenges(event) {
     const file = event.target.files[0];
     if (!file) return;
+    const isCsv = file.name.endsWith('.csv');
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target.result);
+        let data = [];
+        if (isCsv) {
+          data = parseCsv(e.target.result);
+        } else {
+          data = JSON.parse(e.target.result);
+        }
+
         if (!Array.isArray(data)) {
-          alert("Imported data must be a JSON array.");
+          alert("Imported data must be a JSON array or valid CSV.");
           return;
         }
+        
         // merge and prevent duplicates
         const merged = [...customChallenges];
         data.forEach(item => {
@@ -188,7 +300,7 @@
         saveCustomChallenges();
         alert("Forged challenges imported successfully!");
       } catch (err) {
-        alert("Failed to parse JSON file: " + err.message);
+        alert("Failed to parse file: " + err.message);
       }
     };
     reader.readAsText(file);
@@ -201,15 +313,19 @@
       <FileCode size={20} class="header-icon" />
       <h2>Dojo Forge (Challenge Creator)</h2>
     </div>
-    <div class="header-actions">
-      <button class="action-btn-gui outline" onclick={exportForgedChallenges} title="Export custom exercises">
+    <div class="header-actions" style="display: flex; gap: 8px;">
+      <button class="action-btn-gui outline" onclick={() => exportForgedChallenges('json')} title="Export custom exercises as JSON">
         <Download size={12} />
-        <span>Export Forged</span>
+        <span>Export JSON</span>
       </button>
-      <label class="action-btn-gui outline file-label" title="Import custom exercises">
+      <button class="action-btn-gui outline" onclick={() => exportForgedChallenges('csv')} title="Export custom exercises as CSV">
+        <Download size={12} />
+        <span>Export CSV</span>
+      </button>
+      <label class="action-btn-gui outline file-label" title="Import custom exercises from JSON or CSV">
         <Upload size={12} />
-        <span>Import Forged</span>
-        <input type="file" accept=".json" onchange={importForgedChallenges} style="display: none;" />
+        <span>Import JSON/CSV</span>
+        <input type="file" accept=".json,.csv" onchange={importForgedChallenges} style="display: none;" />
       </label>
     </div>
   </div>
