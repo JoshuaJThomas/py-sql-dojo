@@ -106,6 +106,55 @@
     return roots;
   });
 
+  // Estimated CPU Execution Cost profiling functions
+  function estimateStageCost(detail) {
+    const d = detail.toLowerCase();
+    let score = 10; // base minimum cost
+    
+    if (d.includes('correlated')) {
+      score += 70;
+    }
+    if (d.includes('scan table')) {
+      score += 50;
+    }
+    if (d.includes('temp b-tree') || d.includes('sorting')) {
+      score += 35;
+    }
+    if (d.includes('scan subquery')) {
+      score += 25;
+    }
+    if (d.includes('search table')) {
+      if (d.includes('covering index')) {
+        score += 2;
+      } else if (d.includes('index')) {
+        score += 5;
+      } else {
+        score += 15;
+      }
+    }
+    if (d.includes('compound subqueries')) {
+      score += 40;
+    }
+    
+    return score;
+  }
+
+  let totalCostScore = $derived.by(() => {
+    let sum = 0;
+    explainRows.forEach(row => {
+      sum += estimateStageCost(row.detail);
+    });
+    return sum || 1;
+  });
+
+  function getCostColor(detail) {
+    const score = estimateStageCost(detail);
+    const pct = (score / totalCostScore) * 100;
+    if (pct >= 40) return 'var(--color-error)';
+    if (pct >= 15) return 'var(--color-warning)';
+    return 'var(--color-success)';
+  }
+
   // Evaluate query plan to find tables scanned and recommend indexes (Item 151)
   let recommendations = $derived.by(() => {
     const recs = [];
@@ -166,48 +215,56 @@
   {#if explainRows.length === 0}
     <p class="empty-explain-text">Run a valid SQL SELECT query to analyze its execution plan.</p>
   {:else}
-    <!-- Visual Tree Grid -->
-    <div class="explain-tree-canvas">
-      {#each rootNodes as node}
-        <div class="tree-branch">
-          <!-- Node box -->
-          <div class="explain-node-box {getNodeClass(node.detail)}">
-            <div class="node-icon-indicator">
-              {#if getNodeClass(node.detail) === 'node-scan'}
-                ⚠️
-              {:else if getNodeClass(node.detail) === 'node-index'}
-                ⚡
-              {/if}
+    <!-- Svelte 5 Recursive Snippet for Explain Plan Tree Node -->
+    {#snippet renderNode(node)}
+      <div class="tree-branch">
+        <div class="explain-node-box {getNodeClass(node.detail)}">
+          <div class="node-icon-indicator">
+            {#if getNodeClass(node.detail) === 'node-scan'}
+              ⚠️
+            {:else if getNodeClass(node.detail) === 'node-index'}
+              ⚡
+            {:else}
+              ⚙️
+            {/if}
+          </div>
+          <div class="node-details" style="flex: 1; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+              <span class="node-id font-mono">Stage ID: {node.id}</span>
+              <span class="node-cost-badge font-mono" style="color: {getCostColor(node.detail)}; font-weight: 700; font-size: 10px;">
+                CPU: {Math.round((estimateStageCost(node.detail) / totalCostScore) * 100)}%
+              </span>
             </div>
-            <div class="node-details">
-              <span class="node-id">Stage ID: {node.id}</span>
-              <span class="node-desc">{node.detail}</span>
+            <span class="node-desc">{node.detail}</span>
+            
+            <!-- CPU Cost Bar -->
+            <div class="node-cost-bar-bg">
+              <div 
+                class="node-cost-bar-fill" 
+                style="
+                  width: {Math.round((estimateStageCost(node.detail) / totalCostScore) * 100)}%;
+                  background-color: {getCostColor(node.detail)};
+                  box-shadow: 0 0 6px {getCostColor(node.detail)}30;
+                "
+              ></div>
             </div>
           </div>
-
-          <!-- Children branches recursively -->
-          {#if node.children.length > 0}
-            <div class="tree-children">
-              {#each node.children as child}
-                <div class="tree-branch child-branch">
-                  <div class="explain-node-box {getNodeClass(child.detail)}">
-                    <div class="node-icon-indicator">
-                      {#if getNodeClass(child.detail) === 'node-scan'}
-                        ⚠️
-                      {:else if getNodeClass(child.detail) === 'node-index'}
-                        ⚡
-                      {/if}
-                    </div>
-                    <div class="node-details">
-                      <span class="node-id">Stage ID: {child.id}</span>
-                      <span class="node-desc">{child.detail}</span>
-                    </div>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          {/if}
         </div>
+
+        {#if node.children.length > 0}
+          <div class="tree-children">
+            {#each node.children as child}
+              {@render renderNode(child)}
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/snippet}
+
+    <!-- Visual Tree Grid -->
+    <div class="explain-tree-canvas">
+      {#each rootNodes as root}
+        {@render renderNode(root)}
       {/each}
     </div>
 
@@ -423,5 +480,21 @@
 
   .opt-btn:hover {
     opacity: 0.9;
+  }
+
+  /* CPU Cost Progress Bar Styling */
+  .node-cost-bar-bg {
+    background: rgba(255, 255, 255, 0.06);
+    height: 4px;
+    border-radius: var(--radius-pill);
+    margin-top: 6px;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .node-cost-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-pill);
+    transition: width 0.3s ease;
   }
 </style>
