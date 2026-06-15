@@ -181,6 +181,9 @@
     webrtcLogs = [...webrtcLogs, `[${time}] ${msg}`];
   }
 
+  let peerInstance = null;
+  let peerConnection = null;
+
   function initCollabChannel(roomCode) {
     if (collabChannel) {
       collabChannel.close();
@@ -191,20 +194,32 @@
     };
   }
 
+  function broadcastMessage(data) {
+    if (collabChannel) {
+      try {
+        collabChannel.postMessage(data);
+      } catch (e) {}
+    }
+    if (peerConnection && peerConnection.open) {
+      try {
+        peerConnection.send(data);
+      } catch (e) {}
+    }
+  }
+
   function handleCollabMessage(data) {
     if (!data || webrtcStatus === 'offline') return;
 
     switch (data.type) {
       case 'peer-join':
         if (webrtcStatus === 'hosting' || webrtcStatus === 'connected') {
-          addWebrtcLog(`[WebRTC] Peer signaling candidate matched`);
-          addWebrtcLog(`[WebRTC] Connection handshake accepted`);
+          addWebrtcLog(`P2P peer connection requested...`);
           webrtcStatus = 'connected';
           webrtcPeerName = data.peerName || 'Peer Collaborator';
           addWebrtcLog(`Collaborator ${webrtcPeerName} joined sandbox.`);
           playSuccessChime();
 
-          collabChannel.postMessage({
+          broadcastMessage({
             type: 'peer-accept',
             peerName: 'Host Master',
             code: code,
@@ -215,8 +230,6 @@
 
       case 'peer-accept':
         if (webrtcStatus === 'connecting') {
-          addWebrtcLog(`[WebRTC] SDP Answer received`);
-          addWebrtcLog(`[WebRTC] DataChannel connected successfully`);
           webrtcStatus = 'connected';
           webrtcPeerName = data.peerName || 'Host Master';
           addWebrtcLog(`Connected to host ${webrtcPeerName}!`);
@@ -278,8 +291,67 @@
     
     webrtcLogs = [];
     addWebrtcLog(`WebRTC Lobby created: ${webrtcRoomId}`);
-    addWebrtcLog(`Waiting for peer signal...`);
+    addWebrtcLog(`Initializing P2P signaling server...`);
+    
     initCollabChannel(webrtcRoomId);
+
+    if (typeof window !== 'undefined' && window.Peer) {
+      try {
+        if (peerInstance) {
+          peerInstance.destroy();
+        }
+        peerInstance = new window.Peer(webrtcRoomId, {
+          debug: 1,
+          config: {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+          }
+        });
+
+        peerInstance.on('open', (id) => {
+          addWebrtcLog(`P2P Connection ready. Room ID: ${id}`);
+          addWebrtcLog(`Waiting for peer to join sandbox...`);
+        });
+
+        peerInstance.on('connection', (conn) => {
+          peerConnection = conn;
+          setupP2PConnection(conn);
+        });
+
+        peerInstance.on('error', (err) => {
+          console.error("PeerJS Host Error:", err);
+          addWebrtcLog(`[WebRTC Warn] Signaling offline, using local BroadcastChannel.`);
+        });
+      } catch (err) {
+        console.error("PeerJS creation error:", err);
+      }
+    }
+  }
+
+  function setupP2PConnection(conn) {
+    conn.on('open', () => {
+      webrtcStatus = 'connected';
+      webrtcPeerName = conn.peer.startsWith('peer-') ? 'Peer Collaborator' : 'Host Master';
+      addWebrtcLog(`P2P Connection Established with ${webrtcPeerName}!`);
+      playSuccessChime();
+      
+      conn.send({
+        type: 'peer-join',
+        peerName: 'Coder Partner'
+      });
+    });
+
+    conn.on('data', (data) => {
+      handleCollabMessage(data);
+    });
+
+    conn.on('close', () => {
+      addWebrtcLog(`P2P connection closed by remote peer.`);
+      disconnectWebrtc(false);
+    });
+
+    conn.on('error', (err) => {
+      addWebrtcLog(`P2P connection error: ${err.message}`);
+    });
   }
 
   function joinWebrtcRoom(roomCode) {
@@ -291,8 +363,6 @@
     webrtcRoomId = roomCode.trim();
     webrtcLogs = [];
     addWebrtcLog(`Connecting to room: ${webrtcRoomId}`);
-    addWebrtcLog(`[WebRTC] SDP Offer generated`);
-    addWebrtcLog(`[WebRTC] Gathering ICE candidates...`);
     
     initCollabChannel(webrtcRoomId);
 
@@ -305,15 +375,43 @@
       }
     }, 500);
 
+    if (typeof window !== 'undefined' && window.Peer) {
+      try {
+        if (peerInstance) {
+          peerInstance.destroy();
+        }
+        const clientID = 'peer-' + Math.random().toString(36).substr(2, 6);
+        peerInstance = new window.Peer(clientID, {
+          debug: 1,
+          config: {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+          }
+        });
+
+        peerInstance.on('open', () => {
+          addWebrtcLog(`P2P Initiated. Connecting to Host: ${webrtcRoomId}...`);
+          const conn = peerInstance.connect(webrtcRoomId);
+          peerConnection = conn;
+          setupP2PConnection(conn);
+        });
+
+        peerInstance.on('error', (err) => {
+          console.error("PeerJS Joiner Error:", err);
+          addWebrtcLog(`[WebRTC] Fallback to simulated/local connection.`);
+        });
+      } catch (err) {
+        console.error("PeerJS Joiner error:", err);
+      }
+    }
+
     setTimeout(() => {
       if (webrtcStatus === 'connecting') {
         webrtcStatus = 'connected';
         webrtcPeerName = 'Host Master (Simulated)';
         addWebrtcLog(`[WebRTC] Connection timeout: fell back to simulated host.`);
-        addWebrtcLog(`[WebRTC] DataChannel connected successfully`);
         playSuccessChime();
       }
-    }, 4000);
+    }, 4500);
   }
 
   function startWebrtcSimulation() {
@@ -416,8 +514,16 @@
       clearTimeout(collabSimulationInterval);
     }
     isTypingSimulationActive = false;
-    if (shouldBroadcast && collabChannel && webrtcStatus === 'connected') {
-      collabChannel.postMessage({ type: 'disconnect' });
+    if (shouldBroadcast && webrtcStatus === 'connected') {
+      broadcastMessage({ type: 'disconnect' });
+    }
+    if (peerConnection) {
+      try { peerConnection.close(); } catch(e) {}
+      peerConnection = null;
+    }
+    if (peerInstance) {
+      try { peerInstance.destroy(); } catch(e) {}
+      peerInstance = null;
     }
     if (collabChannel) {
       collabChannel.close();
@@ -516,10 +622,10 @@
   // Watch activeLang to broadcast language changes over WebRTC
   $effect(() => {
     const lang = activeLang;
-    if (webrtcStatus === 'connected' && collabChannel) {
+    if (webrtcStatus === 'connected') {
       if (lang !== lastSyncedLang) {
         lastSyncedLang = lang;
-        collabChannel.postMessage({ type: 'lang-change', activeLang: lang });
+        broadcastMessage({ type: 'lang-change', activeLang: lang });
       }
     }
   });
@@ -568,10 +674,10 @@
     }
 
     // WebRTC broadcast code update
-    if (webrtcStatus === 'connected' && syncEditorTyping && collabChannel) {
+    if (webrtcStatus === 'connected' && syncEditorTyping) {
       if (newCode !== lastSyncedCode) {
         lastSyncedCode = newCode;
-        collabChannel.postMessage({ type: 'code-update', code: newCode });
+        broadcastMessage({ type: 'code-update', code: newCode });
       }
     }
   }
@@ -825,8 +931,8 @@
     const startTime = performance.now();
 
     // WebRTC broadcast execution
-    if (!isFromPeer && webrtcStatus === 'connected' && syncExecutions && collabChannel) {
-      collabChannel.postMessage({ type: 'execute-code' });
+    if (!isFromPeer && webrtcStatus === 'connected' && syncExecutions) {
+      broadcastMessage({ type: 'execute-code' });
     }
 
     if (isSandboxMode) {
