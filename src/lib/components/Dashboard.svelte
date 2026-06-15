@@ -58,6 +58,16 @@
   let selectedStatus = $state('all'); // 'all' | 'completed' | 'incomplete'
   let selectedTopic = $state('all');
 
+  function isDueForReview(taskId) {
+    if (!completedList.includes(taskId)) return false;
+    const dateVal = datesMap[taskId];
+    if (!dateVal) return false;
+    const completedTime = new Date(dateVal).getTime();
+    const currentTime = new Date().getTime();
+    // Due for review if completed more than 1 day ago (86400000 ms)
+    return (currentTime - completedTime) > 86400000;
+  }
+
   // Tech Tree View States
   let syllabusViewMode = $state('techtree'); // 'techtree' | 'grid'
   let selectedTreeNode = $state('basics'); // 'basics' | 'data_analytics' | 'logic_oop' | 'advanced'
@@ -1824,10 +1834,14 @@
 
             <div class="task-rows">
               {#each pythonChapters[chNum] as task}
-                <div class="task-row" class:completed={completedList.includes(task.id)}>
+                <div class="task-row" class:completed={completedList.includes(task.id)} class:due-review={isDueForReview(task.id)}>
                   <div class="task-meta">
                     {#if completedList.includes(task.id)}
-                      <CheckCircle size={16} class="status-comp" />
+                      {#if isDueForReview(task.id)}
+                        <span class="review-indicator-badge" title="Spaced repetition: review this challenge for +10 XP bonus!">&#x1f504; Review</span>
+                      {:else}
+                        <CheckCircle size={16} class="status-comp" />
+                      {/if}
                     {:else}
                       <Circle size={16} class="status-empty" />
                     {/if}
@@ -1874,10 +1888,14 @@
 
             <div class="task-rows">
               {#each sqlChapters[chNum] as task}
-                <div class="task-row" class:completed={completedList.includes(task.id)}>
+                <div class="task-row" class:completed={completedList.includes(task.id)} class:due-review={isDueForReview(task.id)}>
                   <div class="task-meta">
                     {#if completedList.includes(task.id)}
-                      <CheckCircle size={16} class="status-comp" />
+                      {#if isDueForReview(task.id)}
+                        <span class="review-indicator-badge" title="Spaced repetition: review this challenge for +10 XP bonus!">&#x1f504; Review</span>
+                      {:else}
+                        <CheckCircle size={16} class="status-comp" />
+                      {/if}
                     {:else}
                       <Circle size={16} class="status-empty" />
                     {/if}
@@ -2296,6 +2314,26 @@
     background: rgba(16, 185, 129, 0.01);
   }
 
+  .task-row.due-review {
+    border-color: rgba(245, 158, 11, 0.25);
+    background: rgba(245, 158, 11, 0.02);
+  }
+
+  .review-indicator-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
   .task-meta {
     display: flex;
     align-items: center;
@@ -2404,10 +2442,19 @@
     display: flex;
     border-bottom: 1px solid #1a1a24;
     background: #111116;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Hide scrollbar for cleaner UI */
+  }
+
+  .control-tabs::-webkit-scrollbar {
+    display: none; /* Hide scrollbar in WebKit browsers */
   }
 
   .control-tab-btn {
-    flex: 1;
+    flex-shrink: 0;
+    flex-grow: 1;
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;

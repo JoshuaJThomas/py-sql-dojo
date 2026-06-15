@@ -60,8 +60,8 @@
     }
     const strVal = String(val).trim();
     
-    // If it starts with 0 and has length > 1, preserve as string (e.g., ZIP code, padded ID)
-    if (strVal.startsWith('0') && strVal.length > 1) {
+    // If it starts with 0 and has length > 1 (excluding decimals like 0.5), preserve as string (e.g., ZIP code, padded ID)
+    if (strVal.startsWith('0') && strVal.length > 1 && !strVal.startsWith('0.')) {
       return `'${strVal.replace(/'/g, "''")}'`;
     }
     
@@ -613,6 +613,16 @@
     padding: 10px 14px;
     text-align: left;
     white-space: nowrap;
+  }
+
+  /* Truncation on mobile/tablet viewports to prevent wide horizontal scrolling */
+  @media (max-width: 768px) {
+    .editor-grid td {
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 
   .editor-grid th {
