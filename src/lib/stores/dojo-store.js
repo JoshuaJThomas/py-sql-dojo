@@ -63,6 +63,7 @@ export const soundStyle = writable(getStorageSanitized('sound_style', 'retro', '
 export const ambientTrack = writable(getStorageSanitized('ambient_track', 'zen', 'string'));
 export const inventory = writable(getStorageSanitized('inventory', { streakFreezes: 0, xpBoosts: 0 }, 'object'));
 export const unlockedBadges = writable(getStorageSanitized('unlocked_badges', [], 'array'));
+export const vanguardAlert = writable(null); // 'unsigned' | 'modified' | null
 
 // Keep track of level based on XP (every 100 XP is a level)
 export const level = writable(1);
@@ -185,13 +186,23 @@ export function checkVanguardIntegrity() {
   
   if (loadedXp > 0 || loadedCompleted.length > 0) {
     if (!loadedSig) {
-      // Legacy user upgrading - sign their progress silently to avoid false warnings
-      updateSignature();
+      if (loadedXp > 50) {
+        vanguardAlert.set('unsigned');
+        xp.set(0);
+        completedChallenges.set([]);
+        unlockedBadges.set([]);
+        streak.set(0);
+        lastCompletedDate.set('');
+        completionDates.set({});
+        updateSignature();
+      } else {
+        updateSignature();
+      }
       return;
     }
     const expectedSig = generateSignature(loadedXp, loadedCompleted);
     if (loadedSig !== expectedSig) {
-      alert("🛡️ Vanguard Anti-Cheat: Local storage modification detected! Your progress has been reverted to prevent cheating.");
+      vanguardAlert.set('modified');
       // Rollback
       xp.set(0);
       completedChallenges.set([]);
@@ -419,6 +430,66 @@ export function saveMockCloudDb(db) {
   }
 }
 
+// Simple sha256 hash helper
+function sha256(ascii) {
+  function rightRotate(value, amount) {
+    return (value>>>amount) | (value<<(32-amount));
+  }
+  var mathPow = Math.pow;
+  var maxWord = mathPow(2, 32);
+  var lengthProperty = 'length';
+  var i, j;
+  var result = '';
+  var words = [];
+  var asciiLength = ascii[lengthProperty];
+  var hash = [];
+  var k = [];
+  var primeCounter = 0;
+  var isComposite = {};
+  for (var candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (i = 0; i < 313; i += candidate) {
+        isComposite[i] = 1;
+      }
+      hash[primeCounter] = (mathPow(candidate, .5)*maxWord)|0;
+      k[primeCounter++] = (mathPow(candidate, 1/3)*maxWord)|0;
+    }
+  }
+  ascii += '\x80';
+  while (ascii[lengthProperty] % 64 - 56) ascii += '\x00';
+  for (i = 0; i < ascii[lengthProperty]; i++) {
+    j = ascii.charCodeAt(i);
+    if (j >> 8) return ''; // ASCII only helper
+    words[i >> 2] |= j << ((3 - i % 4) * 8);
+  }
+  words[words[lengthProperty]] = ((asciiLength * 8) / maxWord) | 0;
+  words[words[lengthProperty]] = (asciiLength * 8);
+  for (j = 0; j < words[lengthProperty];) {
+    var w = words.slice(j, j += 16);
+    var oldHash = hash;
+    hash = hash.slice(0, 8);
+    for (i = 0; i < 64; i++) {
+      var w15 = w[i - 15], w2 = w[i - 2];
+      var s0 = rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3);
+      var s1 = rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10);
+      var ch = (hash[4] & hash[5]) ^ (~hash[4] & hash[6]);
+      var maj = (hash[0] & hash[1]) ^ (hash[0] & hash[2]) ^ (hash[1] & hash[2]);
+      var temp1 = hash[7] + (rightRotate(hash[4], 6) ^ rightRotate(hash[4], 11) ^ rightRotate(hash[4], 25)) + ch + k[i] + (w[i] = (i < 16 ? w[i] : (w[i - 16] + s0 + w[i - 7] + s1) | 0));
+      var temp2 = (rightRotate(hash[0], 2) ^ rightRotate(hash[0], 13) ^ rightRotate(hash[0], 22)) + maj;
+      hash = [(temp1 + temp2) | 0].concat(hash);
+      hash[4] = (hash[4] + temp1) | 0;
+    }
+    for (i = 0; i < 8; i++) {
+      hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+  }
+  for (i = 0; i < 8; i++) {
+    var octet = hash[i] >>> 0;
+    result += (octet.toString(16).padStart(8, '0'));
+  }
+  return result;
+}
+
 // Signup function
 export function registerCloudUser(username, password) {
   const db = getMockCloudDb();
@@ -426,10 +497,11 @@ export function registerCloudUser(username, password) {
   if (exists) {
     throw new Error("Username is already taken in mock cloud database.");
   }
+  const passwordHash = sha256(password);
   const newUser = {
     id: 'u_' + Math.random().toString(36).substr(2, 9),
     username,
-    password,
+    password: passwordHash,
     created_at: new Date().toISOString()
   };
   db.users.push(newUser);
@@ -452,9 +524,18 @@ export function registerCloudUser(username, password) {
 export function loginCloudUser(username, password) {
   const db = getMockCloudDb();
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-  if (!user || user.password !== password) {
+  const passwordHash = sha256(password);
+  
+  if (!user || (user.password !== passwordHash && user.password !== password)) {
     throw new Error("Invalid username or password credentials.");
   }
+
+  // Auto-upgrade legacy plaintext seeds
+  if (user.password === password) {
+    user.password = passwordHash;
+    saveMockCloudDb(db);
+  }
+
   syncUser.set(user);
   return user;
 }

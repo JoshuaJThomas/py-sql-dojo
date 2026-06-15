@@ -5,6 +5,7 @@ let audioCtx = null;
 let ambientInterval = null;
 let currentNotesSource = []; // track active oscillators for smooth stopping
 let ambientBeatCount = 0;
+let masterCompressor = null;
 
 function getAudioContext() {
   if (typeof window === 'undefined') return null;
@@ -12,9 +13,33 @@ function getAudioContext() {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
   if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
+    audioCtx.resume().catch(() => {
+      // Safely catch autoplay block warnings
+    });
   }
   return audioCtx;
+}
+
+// Global user-gesture handler to resume AudioContext automatically on first interaction
+if (typeof window !== 'undefined') {
+  const resumeAudio = () => {
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().then(() => {
+        window.removeEventListener('click', resumeAudio);
+        window.removeEventListener('keydown', resumeAudio);
+      }).catch(() => {});
+    }
+  };
+  window.addEventListener('click', resumeAudio);
+  window.addEventListener('keydown', resumeAudio);
+}
+
+function getMasterCompressor(ctx) {
+  if (!masterCompressor) {
+    masterCompressor = ctx.createDynamicsCompressor();
+    masterCompressor.connect(ctx.destination);
+  }
+  return masterCompressor;
 }
 
 // Play sound effects based on style & volume
@@ -41,6 +66,8 @@ export function playSuccessChime() {
     oscType = 'triangle';
   }
 
+  const dest = getMasterCompressor(ctx);
+
   frequencies.forEach((freq, idx) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -53,10 +80,15 @@ export function playSuccessChime() {
     gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.06 + 0.35);
     
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(dest);
     
     osc.start(now + idx * 0.06);
     osc.stop(now + idx * 0.06 + 0.4);
+    
+    currentNotesSource.push(osc);
+    osc.onended = () => {
+      currentNotesSource = currentNotesSource.filter(node => node !== osc);
+    };
   });
 }
 
@@ -77,6 +109,7 @@ export function playLevelUpFanfare() {
   ];
 
   let oscType = style === 'arcade' ? 'square' : style === 'cyberpunk' ? 'sawtooth' : 'triangle';
+  const dest = getMasterCompressor(ctx);
 
   chords.forEach((chord, chordIdx) => {
     const startTime = now + chordIdx * 0.22;
@@ -93,10 +126,15 @@ export function playLevelUpFanfare() {
       gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
       
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(dest);
       
       osc.start(startTime);
       osc.stop(startTime + duration);
+      
+      currentNotesSource.push(osc);
+      osc.onended = () => {
+        currentNotesSource = currentNotesSource.filter(node => node !== osc);
+      };
     });
   });
 }
@@ -112,6 +150,7 @@ export function playErrorBuzz() {
 
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
+  const dest = getMasterCompressor(ctx);
 
   osc.type = style === 'arcade' ? 'square' : style === 'cyberpunk' ? 'sawtooth' : 'sawtooth';
   osc.frequency.setValueAtTime(style === 'cyberpunk' ? 120 : 160, now);
@@ -121,10 +160,15 @@ export function playErrorBuzz() {
   gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
 
   osc.connect(gain);
-  gain.connect(ctx.destination);
+  gain.connect(dest);
 
   osc.start(now);
   osc.stop(now + 0.25);
+  
+  currentNotesSource.push(osc);
+  osc.onended = () => {
+    currentNotesSource = currentNotesSource.filter(node => node !== osc);
+  };
 }
 
 // Procedural Ambient Music Synthesizer (Item 193)
@@ -167,6 +211,7 @@ function triggerAmbientStep(ctx) {
   const now = ctx.currentTime;
   const track = get(ambientTrack);
   const vol = get(musicVolume) * 0.08; // safety cap
+  const dest = getMasterCompressor(ctx);
 
   if (track === 'zen') {
     // Zero rhythm, floating warm drone chords every 8 beats
@@ -189,10 +234,14 @@ function triggerAmbientStep(ctx) {
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.2);
         
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         osc.start(now);
         osc.stop(now + 3.25);
+        
         currentNotesSource.push(osc);
+        osc.onended = () => {
+          currentNotesSource = currentNotesSource.filter(node => node !== osc);
+        };
       });
     }
   } else if (track === 'lofi') {
@@ -213,8 +262,13 @@ function triggerAmbientStep(ctx) {
       const noise = ctx.createBufferSource();
       noise.buffer = buffer;
       noise.connect(noiseGain);
-      noiseGain.connect(ctx.destination);
+      noiseGain.connect(dest);
       noise.start(now);
+      
+      currentNotesSource.push(noise);
+      noise.onended = () => {
+        currentNotesSource = currentNotesSource.filter(node => node !== noise);
+      };
     }
 
     // Chord every 4 beats
@@ -235,10 +289,14 @@ function triggerAmbientStep(ctx) {
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.5);
         
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         osc.start(now);
         osc.stop(now + 1.6);
+        
         currentNotesSource.push(osc);
+        osc.onended = () => {
+          currentNotesSource = currentNotesSource.filter(node => node !== osc);
+        };
       });
     }
   } else if (track === 'synthwave') {
@@ -256,10 +314,14 @@ function triggerAmbientStep(ctx) {
     bassGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
     
     bassOsc.connect(bassGain);
-    bassGain.connect(ctx.destination);
+    bassGain.connect(dest);
     bassOsc.start(now);
     bassOsc.stop(now + 0.38);
+    
     currentNotesSource.push(bassOsc);
+    bassOsc.onended = () => {
+      currentNotesSource = currentNotesSource.filter(node => node !== bassOsc);
+    };
 
     if (ambientBeatCount % 4 === 0) {
       const synthChords = [
@@ -278,18 +340,17 @@ function triggerAmbientStep(ctx) {
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
         
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest);
         osc.start(now);
         osc.stop(now + 1.3);
+        
         currentNotesSource.push(osc);
+        osc.onended = () => {
+          currentNotesSource = currentNotesSource.filter(node => node !== osc);
+        };
       });
     }
   }
 
   ambientBeatCount = (ambientBeatCount + 1) % 32;
-  
-  // Clean references
-  if (currentNotesSource.length > 50) {
-    currentNotesSource = currentNotesSource.slice(-20);
-  }
 }

@@ -1,0 +1,36 @@
+{
+  "project": "Python & SQL Interactive Dojo",
+  "lastUpdated": "2026-06-15T10:56:15Z",
+  "scheduledLoop": {
+    "taskId": "1b3a70ad-350b-4cdc-baef-e0fbeca2af2f/task-36",
+    "cronExpression": "0 */5 * * *",
+    "prompt": "Triggering 5-hour discussion loop and codebase improvement review for the Python & SQL Dojo website. Assess memory, continue agent discussions, list and address improvements."
+  },
+  "alignmentSettings": {
+    "collaborationMode": "AI Cohort Partners + local emulation",
+    "securityProfile": "Standard client validation",
+    "syllabusLayout": "3D-like Interactive SVG Tech Tree Map",
+    "bossBattlesEnabled": true,
+    "soundscapeType": "Procedural Web Audio with connection fixes",
+    "diagnosticQuizCount": 5,
+    "antiCheatStrictness": "Moderate warning with option to reset",
+    "jupyterDbSyncEnabled": true,
+    "webWorkersEnabled": true,
+    "bottomNavEnabledMobile": true
+  },
+  "completedFeatures": [
+    "Fixed CodeMirror keystroke lock in Editor.svelte by untracking the value prop.",
+    "Created mobile bottom navigation bar in App.svelte for viewport switching (Task, Editor, Console).",
+    "Implemented shared persistent SQLite database connection in sql-runner.js for SQL Jupyter Notebook cells.",
+    "Created Interactive Tech Tree Skill Map in Dashboard.svelte with SVG path layouts and glowing node filters.",
+    "Implemented 5-question Diagnostic Placement Quiz to test out of Basics and unlock intermediate specializations.",
+    "Fixed validation bug in sql-coalesce-null-date-41 exercise where it expected 7 rows instead of 8.",
+    "Resolved soundscape oscillator leaks by using onended cleanup hooks and added a master DynamicsCompressor node.",
+    "Fixed Vanguard Anti-Cheat signature deletion bypass exploit by adding unsigned XP threshold verification.",
+    "Cleaned up package duplicate dependencies (removed @lucide/svelte from package.json).",
+    "Implemented AI Cohort Partner Assist coding simulator button and active typing header indicators inside the playground."
+  ],
+  "pendingFeatures": [
+    "Migrate Pyodide and sql.js WASM executables to Web Workers for multi-threaded background compiling."
+  ]
+}

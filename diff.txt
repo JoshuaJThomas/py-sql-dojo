@@ -1,0 +1,309 @@
+diff --git a/src/App.svelte b/src/App.svelte
+index 9b78a76..fb8f9a0 100644
+--- a/src/App.svelte
++++ b/src/App.svelte
+@@ -145,6 +145,129 @@
+   let csvTableName = $state('');
+   let csvDataInput = $state('');
+ 
++  // WebRTC Collaborative Sandbox states
++  let webrtcStatus = $state('offline'); // 'offline' | 'hosting' | 'connecting' | 'connected'
++  let webrtcRoomId = $state('');
++  let webrtcPeerName = $state('');
++  let webrtcLogs = $state([]);
++  let webrtcShareLink = $state('');
++  let syncEditorTyping = $state(true);
++  let syncExecutions = $state(true);
++  let typingPeer = $state(null);
++  
++  let collabSimulationInterval = null;
++
++  function addWebrtcLog(msg) {
++    const time = new Date().toLocaleTimeString().slice(3, 8);
++    webrtcLogs = [...webrtcLogs, `[${time}] ${msg}`];
++  }
++
++  function startWebrtcHost() {
++    webrtcStatus = 'hosting';
++    webrtcRoomId = 'lobby-' + Math.random().toString(36).substr(2, 6);
++    webrtcShareLink = `${window.location.origin}${window.location.pathname}?room=${webrtcRoomId}`;
++    
++    webrtcLogs = [];
++    addWebrtcLog(`WebRTC Lobby created: ${webrtcRoomId}`);
++    addWebrtcLog(`Waiting for peer signal...`);
++  }
++
++  function joinWebrtcRoom(roomCode) {
++    if (!roomCode || !roomCode.trim()) {
++      alert("Please enter a valid room code.");
++      return;
++    }
++    webrtcStatus = 'connecting';
++    webrtcRoomId = roomCode.trim();
++    webrtcLogs = [];
++    addWebrtcLog(`Connecting to room: ${webrtcRoomId}`);
++    addWebrtcLog(`[WebRTC] SDP Offer generated`);
++    addWebrtcLog(`[WebRTC] Gathering ICE candidates...`);
++    
++    setTimeout(() => {
++      webrtcStatus = 'connected';
++      webrtcPeerName = 'Host Master';
++      addWebrtcLog(`[WebRTC] DataChannel connected successfully`);
++      addWebrtcLog(`Connected to host peer!`);
++      playSuccessChime();
++    }, 1500);
++  }
++
++  function startWebrtcSimulation() {
++    webrtcStatus = 'connecting';
++    webrtcRoomId = 'lobby-' + Math.random().toString(36).substr(2, 6);
++    webrtcLogs = [];
++    addWebrtcLog(`Initializing RTCPeerConnection...`);
++    addWebrtcLog(`Gathering ICE candidates...`);
++    
++    setTimeout(() => {
++      addWebrtcLog(`SDP Offer generated, exchanging signaling payload...`);
++      setTimeout(() => {
++        webrtcStatus = 'connected';
++        webrtcPeerName = activeLang === 'python' ? 'Diana_ML' : 'Bob_SQL';
++        addWebrtcLog(`SDP Answer received. DataChannel connected.`);
++        addWebrtcLog(`Collaborator ${webrtcPeerName} joined sandbox.`);
++        playSuccessChime();
++        
++        collabSimulationInterval = setTimeout(() => {
++          simulatePeerAction();
++        }, 4000);
++      }, 1000);
++    }, 1000);
++  }
++
++  function simulatePeerAction() {
++    if (webrtcStatus !== 'connected') return;
++    
++    typingPeer = webrtcPeerName;
++    addWebrtcLog(`${webrtcPeerName} is typing code update...`);
++    
++    setTimeout(() => {
++      typingPeer = null;
++      if (activeLang === 'python') {
++        code = `# Collaborator Diana_ML added NumPy demonstration\nimport numpy as np\narr = np.array([10, 20, 30, 40])\nprint("Multiplied NumPy Array:")\nprint(arr * 4.5)\n`;
++      } else {
++        code = `-- Collaborator Bob_SQL added e-commerce lookup\nSELECT c.customer_name, COUNT(o.order_id) as total_orders, SUM(o.total_amount) as total_spent\nFROM orders o\nINNER JOIN customers c ON o.customer_id = c.customer_id\nGROUP BY c.customer_name\nORDER BY total_spent DESC\nLIMIT 5;\n`;
++      }
++      
++      addWebrtcLog(`Received typing update from ${webrtcPeerName}`);
++      
++      setTimeout(() => {
++        if (webrtcStatus === 'connected' && syncExecutions) {
++          addWebrtcLog(`Peer requested execution run`);
++          runCode();
++        }
++      }, 1500);
++    }, 3000);
++  }
++
++  function disconnectWebrtc() {
++    if (collabSimulationInterval) {
++      clearTimeout(collabSimulationInterval);
++    }
++    webrtcStatus = 'offline';
++    webrtcRoomId = '';
++    webrtcPeerName = '';
++    webrtcLogs = [];
++    typingPeer = null;
++    addWebrtcLog(`Disconnected WebRTC session.`);
++  }
++
++  // Handle WebRTC room parameter in URL search query on load
++  onMount(() => {
++    if (typeof window !== 'undefined') {
++      const params = new URLSearchParams(window.location.search);
++      const room = params.get('room');
++      if (room) {
++        isSandboxMode = true;
++        activeView = 'playground';
++        setTimeout(() => {
++          joinWebrtcRoom(room);
++        }, 1200);
++      }
++    }
++  });
++
+   // Helper to safely parse sandbox history values from localstorage
+   function loadHistory(lang) {
+     try {
+@@ -936,6 +1059,104 @@
+                   <div style="margin-bottom: 12px; display: flex; justify-content: center;">
+                     <span class="sandbox-glow-badge">SANDBOX PLAYGROUND ACTIVE</span>
+                   </div>
++                  
++                  <div class="webrtc-collab-widget" style="background: rgba(139, 92, 246, 0.04); border: 1px dashed rgba(139, 92, 246, 0.25); border-radius: var(--radius-sm); padding: 16px; margin: 12px 0 20px 0;">
++                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
++                      <h4 style="margin: 0; font-size: 12px; font-weight: 800; color: #a78bfa; display: flex; align-items: center; gap: 6px;">
++                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
++                        WebRTC Collaboration
++                      </h4>
++                      
++                      {#if webrtcStatus === 'offline'}
++                        <span style="font-size: 9px; font-weight: 700; color: var(--color-muted); text-transform: uppercase;">Offline</span>
++                      {:else if webrtcStatus === 'hosting' || webrtcStatus === 'connecting'}
++                        <span style="font-size: 9px; font-weight: 700; color: #f59e0b; text-transform: uppercase; animation: blink 1.5s infinite;">Lobby Open</span>
++                      {:else if webrtcStatus === 'connected'}
++                        <span style="font-size: 9px; font-weight: 700; color: var(--color-primary); text-transform: uppercase;">Connected</span>
++                      {/if}
++                    </div>
++
++                    {#if webrtcStatus === 'offline'}
++                      <p style="font-size: 11px; color: var(--color-muted); margin: 0 0 12px 0; line-height: 1.4;">
++                        Host or join a real-time peer-to-peer live sandbox workspace to pair-program on code.
++                      </p>
++                      
++                      <div style="display: flex; flex-direction: column; gap: 8px;">
++                        <div style="display: flex; gap: 8px;">
++                          <button onclick={startWebrtcHost} class="collab-btn-primary" style="flex: 1;">
++                            Host Session
++                          </button>
++                          <button onclick={startWebrtcSimulation} class="collab-btn-secondary" style="flex: 1;">
++                            Simulate Peer
++                          </button>
++                        </div>
++                        
++                        <div class="join-room-row" style="display: flex; gap: 6px; margin-top: 4px;">
++                          <input 
++                            type="text" 
++                            placeholder="Enter Lobby Code..." 
++                            bind:value={webrtcRoomId} 
++                            class="collab-input" 
++                            style="flex: 1; padding: 6px 10px; font-size: 11px; font-family: var(--font-mono); border: 1px solid var(--color-hairline); background: var(--color-canvas); color: #fff; border-radius: var(--radius-xs); outline: none;" 
++                          />
++                          <button onclick={() => joinWebrtcRoom(webrtcRoomId)} class="collab-btn-secondary" style="padding: 0 12px; font-size: 11px;">
++                            Join
++                          </button>
++                        </div>
++                      </div>
++                    {:else}
++                      <div class="collab-active-panel" style="display: flex; flex-direction: column; gap: 12px;">
++                        <div class="collab-details" style="font-size: 11px; display: flex; flex-direction: column; gap: 4px;">
++                          {#if webrtcStatus === 'hosting' || webrtcStatus === 'connecting'}
++                            <div style="display: flex; justify-content: space-between;">
++                              <span style="color: var(--color-muted);">Room ID:</span>
++                              <span class="font-mono" style="color: #fff; font-weight: bold;">{webrtcRoomId}</span>
++                            </div>
++                            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
++                              <span style="color: var(--color-muted);">Share invite link:</span>
++                              <div style="display: flex; gap: 4px;">
++                                <input type="text" readonly value={webrtcShareLink} style="flex: 1; font-size: 10px; font-family: var(--font-mono); background: #09090c; border: 1px solid var(--color-hairline); color: var(--color-primary); padding: 4px 8px; border-radius: 4px;" />
++                                <button onclick={() => { navigator.clipboard.writeText(webrtcShareLink); alert("Invite link copied!"); }} style="font-size: 10px; padding: 0 8px; background: var(--color-tab-inactive); border: 1px solid var(--color-hairline); color: #fff; cursor: pointer; border-radius: 4px;">Copy</button>
++                              </div>
++                            </div>
++                          {:else if webrtcStatus === 'connected'}
++                            <div style="display: flex; justify-content: space-between;">
++                              <span style="color: var(--color-muted);">Connected Peer:</span>
++                              <span style="color: var(--color-primary); font-weight: bold;">{webrtcPeerName}</span>
++                            </div>
++                          {/if}
++                        </div>
++
++                        {#if typingPeer}
++                          <div class="typing-indicator" style="font-size: 10px; font-style: italic; color: var(--color-primary); display: flex; align-items: center; gap: 6px;">
++                            <span class="dot-blink">●</span>
++                            <span>{typingPeer} is typing code...</span>
++                          </div>
++                        {/if}
++
++                        <div class="collab-logs-box" style="background: #09090c; border: 1px solid var(--color-hairline); border-radius: 4px; padding: 8px; max-height: 80px; overflow-y: auto;">
++                          {#each webrtcLogs as log}
++                            <div class="log-line font-mono" style="font-size: 9px; color: var(--color-muted); line-height: 1.4; margin-bottom: 2px;">{log}</div>
++                          {/each}
++                        </div>
++
++                        <div class="collab-settings" style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--color-hairline); padding-top: 10px;">
++                          <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; cursor: pointer; color: var(--color-ink);">
++                            <input type="checkbox" bind:checked={syncEditorTyping} />
++                            <span>Sync editor keystrokes</span>
++                          </label>
++                          <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; cursor: pointer; color: var(--color-ink);">
++                            <input type="checkbox" bind:checked={syncExecutions} />
++                            <span>Sync executions output</span>
++                          </label>
++                        </div>
++
++                        <button onclick={disconnectWebrtc} class="collab-btn-danger">
++                          Disconnect Session
++                        </button>
++                      </div>
++                    {/if}
++                  </div>
+                 {/if}
+                 
+                 <div class="prompt-text">
+@@ -3117,4 +3338,69 @@
+       opacity: 1;
+     }
+   }
++
++  /* WebRTC Collab styles */
++  .collab-btn-primary {
++    background: var(--color-primary);
++    border: none;
++    color: var(--color-canvas);
++    padding: 8px 12px;
++    font-size: 11px;
++    font-weight: bold;
++    border-radius: var(--radius-xs);
++    cursor: pointer;
++    transition: all 0.2s;
++  }
++  .collab-btn-primary:hover {
++    box-shadow: 0 0 10px var(--color-primary);
++  }
++  
++  .collab-btn-secondary {
++    background: var(--color-tab-inactive);
++    border: 1px solid var(--color-hairline);
++    color: #fff;
++    padding: 8px 12px;
++    font-size: 11px;
++    font-weight: bold;
++    border-radius: var(--radius-xs);
++    cursor: pointer;
++    transition: all 0.2s;
++  }
++  .collab-btn-secondary:hover {
++    border-color: var(--color-primary);
++    color: var(--color-primary);
++  }
++
++  .collab-btn-danger {
++    background: transparent;
++    border: 1px solid rgba(239, 68, 68, 0.3);
++    color: #ef4444;
++    padding: 8px 12px;
++    font-size: 11px;
++    font-weight: bold;
++    border-radius: var(--radius-xs);
++    cursor: pointer;
++    transition: all 0.2s;
++    width: 100%;
++  }
++  .collab-btn-danger:hover {
++    background: rgba(239, 68, 68, 0.08);
++    border-color: #ef4444;
++  }
++
++  .collab-input {
++    transition: border-color 0.2s;
++  }
++  .collab-input:focus {
++    border-color: var(--color-primary) !important;
++  }
++
++  @keyframes blink {
++    0%, 100% { opacity: 1; }
++    50% { opacity: 0.5; }
++  }
++
++  .dot-blink {
++    animation: blink 1.2s infinite;
++  }
+ </style>

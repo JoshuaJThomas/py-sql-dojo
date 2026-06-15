@@ -150,10 +150,10 @@
 
   // CSV Serialization Helper
   function convertToCsv(arr) {
-    const headers = ['id', 'chapter', 'topic', 'title', 'prompt', 'starterCode', 'hint', 'solution', 'difficulty', 'language', 'isCustom'];
+    const headers = ['id', 'chapter', 'topic', 'title', 'prompt', 'starterCode', 'hint', 'solution', 'difficulty', 'language', 'isCustom', 'checks'];
     const escapeCsvValue = (val) => {
       if (val === null || val === undefined) return '""';
-      let str = String(val);
+      let str = typeof val === 'object' ? JSON.stringify(val) : String(val);
       str = str.replace(/"/g, '""');
       return `"${str}"`;
     };
@@ -216,20 +216,31 @@
       // Parse fields back
       if (obj.chapter) obj.chapter = Number(obj.chapter) || 1;
       if (obj.isCustom) obj.isCustom = obj.isCustom === 'true';
-      if (obj.language === 'sql') {
-        obj.checks = [
-          {
-            rule: `(result) => result && result.length > 0`,
-            msg: "Query must return a result table"
-          }
-        ];
-      } else {
-        obj.checks = [
-          {
-            test: 'True',
-            msg: 'Compiled successfully'
-          }
-        ];
+      
+      if (obj.checks) {
+        try {
+          obj.checks = JSON.parse(obj.checks);
+        } catch (e) {
+          obj.checks = null;
+        }
+      }
+      
+      if (!obj.checks || !Array.isArray(obj.checks)) {
+        if (obj.language === 'sql') {
+          obj.checks = [
+            {
+              rule: `(result) => result && result.length > 0`,
+              msg: "Query must return a result table"
+            }
+          ];
+        } else {
+          obj.checks = [
+            {
+              test: 'True',
+              msg: 'Compiled successfully'
+            }
+          ];
+        }
       }
       data.push(obj);
     }
