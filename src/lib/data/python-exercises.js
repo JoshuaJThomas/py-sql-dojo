@@ -556,7 +556,8 @@ export const pythonExercises = [
     prelude: "from sklearn.datasets import make_classification\nX, y = make_classification(n_samples=50, n_features=4, n_classes=2, random_state=42)",
     checks: [
       { test: "from sklearn.svm import SVC; isinstance(result, SVC)", msg: "result must be an instance of SVC" },
-      { test: "result.kernel == 'rbf' and result.C == 1.0", msg: "SVC must use 'rbf' kernel and C=1.0" }
+      { test: "result.kernel == 'rbf' and result.C == 1.0", msg: "SVC must use 'rbf' kernel and C=1.0" },
+      { test: "hasattr(result, 'classes_')", msg: "SVM model must be fitted on training data X and y" }
     ],
     hint: "Use `SVC(kernel='rbf', C=1.0)` and call `.fit(X, y)`.",
     solution: "model = SVC(kernel='rbf', C=1.0)\nmodel.fit(X, y)\nresult = model",
@@ -574,7 +575,8 @@ export const pythonExercises = [
     prelude: "from sklearn.datasets import make_classification\nX, y = make_classification(n_samples=50, n_features=4, n_classes=2, random_state=42)",
     checks: [
       { test: "from sklearn.tree import DecisionTreeClassifier; isinstance(result, DecisionTreeClassifier)", msg: "result must be an instance of DecisionTreeClassifier" },
-      { test: "result.max_depth == 4", msg: "DecisionTree max_depth must be 4" }
+      { test: "result.max_depth == 4", msg: "DecisionTree max_depth must be 4" },
+      { test: "hasattr(result, 'classes_')", msg: "DecisionTree must be fitted on training data X and y" }
     ],
     hint: "Instantiate `DecisionTreeClassifier(max_depth=4)` and fit it.",
     solution: "model = DecisionTreeClassifier(max_depth=4)\nmodel.fit(X, y)\nresult = model",
@@ -590,7 +592,8 @@ export const pythonExercises = [
     prelude: "from sklearn.datasets import make_classification\nX, y = make_classification(n_samples=50, n_features=4, n_classes=2, random_state=42)",
     checks: [
       { test: "from sklearn.ensemble import RandomForestClassifier; isinstance(result, RandomForestClassifier)", msg: "result must be an instance of RandomForestClassifier" },
-      { test: "result.n_estimators == 100 and result.max_features == 'sqrt'", msg: "RandomForest must use 100 estimators and sqrt max_features" }
+      { test: "result.n_estimators == 100 and result.max_features == 'sqrt'", msg: "RandomForest must use 100 estimators and sqrt max_features" },
+      { test: "hasattr(result, 'estimators_')", msg: "RandomForest must be fitted on training data X and y" }
     ],
     hint: "Instantiate `RandomForestClassifier(n_estimators=100, max_features='sqrt')` and fit it.",
     solution: "model = RandomForestClassifier(n_estimators=100, max_features='sqrt')\nmodel.fit(X, y)\nresult = model",
@@ -904,7 +907,8 @@ export const pythonExercises = [
     prelude: "from sklearn.datasets import make_regression\nX, y = make_regression(n_samples=40, n_features=3, random_state=42)",
     checks: [
       { test: "from sklearn.linear_model import Lasso; isinstance(result, Lasso)", msg: "result must be an instance of Lasso" },
-      { test: "result.alpha == 0.5", msg: "Lasso alpha parameter must be 0.5" }
+      { test: "result.alpha == 0.5", msg: "Lasso alpha parameter must be 0.5" },
+      { test: "hasattr(result, 'coef_')", msg: "Lasso model must be fitted on training data X and y" }
     ],
     hint: "Use Lasso(alpha=0.5) and fit it.",
     solution: "model = Lasso(alpha=0.5)\nmodel.fit(X, y)\nresult = model",
@@ -953,7 +957,8 @@ export const pythonExercises = [
     prelude: "from sklearn.datasets import make_classification\nX, y = make_classification(n_samples=50, n_features=4, random_state=42)",
     checks: [
       { test: "from sklearn.ensemble import GradientBoostingClassifier; isinstance(result, GradientBoostingClassifier)", msg: "result must be a GradientBoostingClassifier" },
-      { test: "result.n_estimators == 50 and result.learning_rate == 0.1", msg: "GradientBoosting model parameters do not match" }
+      { test: "result.n_estimators == 50 and result.learning_rate == 0.1", msg: "GradientBoosting model parameters do not match" },
+      { test: "hasattr(result, 'estimators_')", msg: "GradientBoosting model must be fitted on training data X and y" }
     ],
     hint: "Use GradientBoostingClassifier(n_estimators=50, learning_rate=0.1) and fit.",
     solution: "model = GradientBoostingClassifier(n_estimators=50, learning_rate=0.1)\nmodel.fit(X, y)\nresult = model",
