@@ -455,6 +455,14 @@
     gap: 16px;
   }
 
+  /* Breakpoint for tablet/mobile viewports */
+  @media (max-width: 768px) {
+    .stats-overview-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+  }
+
   .stat-card {
     background: var(--color-card-bg);
     border: 1px solid var(--color-hairline);

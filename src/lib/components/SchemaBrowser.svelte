@@ -128,6 +128,37 @@
     localStorage.setItem('dojo_erd_positions', JSON.stringify(cardPositions));
   }
 
+  function handleTouchStart(event, tableName) {
+    if (event.touches.length !== 1) return;
+    if (event.cancelable) event.preventDefault(); // Prevent page scrolling
+    draggingTable = tableName;
+    const pos = cardPositions[tableName] || { x: 0, y: 0 };
+    const touch = event.touches[0];
+    dragStartOffset = {
+      x: touch.clientX - pos.x,
+      y: touch.clientY - pos.y
+    };
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+  }
+
+  function handleTouchMove(event) {
+    if (!draggingTable || event.touches.length !== 1) return;
+    if (event.cancelable) event.preventDefault();
+    const touch = event.touches[0];
+    cardPositions[draggingTable] = {
+      x: touch.clientX - dragStartOffset.x,
+      y: touch.clientY - dragStartOffset.y
+    };
+  }
+
+  function handleTouchEnd() {
+    draggingTable = null;
+    window.removeEventListener('touchmove', handleTouchMove);
+    window.removeEventListener('touchend', handleTouchEnd);
+    localStorage.setItem('dojo_erd_positions', JSON.stringify(cardPositions));
+  }
+
   function updateConnectorLines() {
     if (!diagramContainer) return;
     const containerRect = diagramContainer.getBoundingClientRect();
@@ -271,6 +302,7 @@
             <div 
               class="diagram-card-header drag-handle" 
               onmousedown={(e) => handleMouseDown(e, tableName)}
+              ontouchstart={(e) => handleTouchStart(e, tableName)}
               role="presentation"
               style="cursor: grab;"
             >

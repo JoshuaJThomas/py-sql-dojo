@@ -136,6 +136,7 @@
   let activeTabLeft = $state('task'); // 'task' | 'concept' | 'cheats'
   let showHint = $state(false);
   let showSolution = $state(false);
+  let consecutiveFailures = $state(0);
   let activeTabRight = $state('console'); // 'console' | 'schema'
   let showConfetti = $state(false);
 
@@ -640,6 +641,14 @@
     }
   });
 
+  // Reset consecutive failures and hide hints when current challenge changes
+  $effect(() => {
+    const id = currentChallenge?.id;
+    consecutiveFailures = 0;
+    showHint = false;
+    showSolution = false;
+  });
+
   // Triggered when clicking "Train" from Dashboard
   $effect(() => {
     // If the challenge index changes, switch to playground
@@ -946,6 +955,7 @@
       pyResult = { ...outcome, executionTime: endTime - startTime, executedCode: code };
 
       if (!isSandboxMode && outcome.success && outcome.checksPassed) {
+        consecutiveFailures = 0;
         const newlyUnlocked = completeChallenge(currentChallenge.id, currentChallenge.difficulty);
         if (newlyUnlocked && newlyUnlocked.length > 0) {
           showBadgeUnlockNotification(newlyUnlocked);
@@ -960,6 +970,7 @@
         }
         triggerConfetti();
       } else if (!isSandboxMode && (!outcome.success || !outcome.checksPassed)) {
+        consecutiveFailures += 1;
         playErrorBuzz();
       } else if (isSandboxMode) {
         if (outcome.success) {
@@ -1007,6 +1018,7 @@
       };
 
       if (!isSandboxMode && allChecksPassed) {
+        consecutiveFailures = 0;
         const oldLevel = get(level);
         const newlyUnlocked = completeChallenge(currentChallenge.id, currentChallenge.difficulty);
         if (newlyUnlocked && newlyUnlocked.length > 0) {
@@ -1022,6 +1034,7 @@
         }
         triggerConfetti();
       } else if (!isSandboxMode && !allChecksPassed) {
+        consecutiveFailures += 1;
         playErrorBuzz();
       } else if (isSandboxMode) {
         if (outcome.success) {
@@ -1526,6 +1539,15 @@
                     {#if showHint}
                       <div class="expansion-content">
                         <p>{@html parseMarkdown(currentChallenge.hint)}</p>
+                        {#if consecutiveFailures >= 3 && currentChallenge.solution}
+                          <div class="scaffolding-box" style="margin-top: 10px; padding: 10px; border-left: 2px solid var(--color-primary); background: rgba(139, 92, 246, 0.05); border-radius: var(--radius-xs);">
+                            <span style="font-size: 10px; font-weight: bold; color: var(--color-primary); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Adaptive Scaffolding (3+ Attempts Failed)</span>
+                            <p style="font-size: 11px; margin: 0; line-height: 1.4; color: var(--color-ink);">
+                              Boilerplate to get you started:<br/>
+                              <code style="background: #09090c; padding: 2px 6px; border-radius: 4px; font-family: monospace; display: inline-block; margin-top: 4px; border: 1px solid var(--color-hairline); color: #cbd5e1;">{currentChallenge.solution.substring(0, Math.floor(currentChallenge.solution.length / 2))}...</code>
+                            </p>
+                          </div>
+                        {/if}
                       </div>
                     {/if}
                   </div>
@@ -2471,6 +2493,20 @@
     grid-template-columns: 320px 1fr 1fr;
     overflow: hidden;
     background: var(--color-canvas);
+  }
+
+  /* Breakpoint for tablet viewports */
+  @media (max-width: 1024px) {
+    .workspace-grid {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto auto;
+      overflow-y: auto;
+    }
+    .panel-left, .panel-center {
+      border-right: none;
+      border-bottom: 1px solid var(--color-hairline);
+      height: auto;
+    }
   }
 
   .workspace-panel {

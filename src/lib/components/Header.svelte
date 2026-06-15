@@ -544,4 +544,20 @@
     border-color: rgba(239, 68, 68, 0.2);
     background: rgba(239, 68, 68, 0.05);
   }
+
+  /* Breakpoint for tablet viewports */
+  @media (max-width: 1024px) {
+    .header-container {
+      height: auto;
+      padding: 12px 24px;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
+    .stats-panel {
+      width: 100%;
+      justify-content: center;
+      gap: 16px;
+    }
+  }
 </style>
