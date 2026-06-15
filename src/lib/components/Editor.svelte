@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { EditorState } from '@codemirror/state';
   import { EditorView, keymap, drawSelection, lineNumbers } from '@codemirror/view';
   import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
@@ -68,8 +68,8 @@
   }
 
   let containerEl;
-  let view;
-  let isUpdating = false;
+  let view = $state(null);
+  let isUpdating = $state(false);
 
   let activeTheme = $derived($theme);
 
@@ -164,9 +164,11 @@
 
   $effect(() => {
     // Recreate the state if language, fontSize, wordWrap, or theme changes
+    // We untrack the value so typing doesn't re-instantiate CodeMirror
     if (view) {
       isUpdating = true;
-      view.setState(createEditorState(value, language, fontSize, wordWrap, activeTheme === 'light'));
+      const currentValue = untrack(() => value);
+      view.setState(createEditorState(currentValue, language, fontSize, wordWrap, activeTheme === 'light'));
       isUpdating = false;
     }
   });

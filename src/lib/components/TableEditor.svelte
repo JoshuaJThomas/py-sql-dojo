@@ -58,11 +58,21 @@
     if (val === null || val === undefined || String(val).trim() === '' || String(val).toUpperCase() === 'NULL') {
       return 'NULL';
     }
-    if (typeof val === 'number' || !isNaN(Number(val))) {
-      return Number(val);
+    const strVal = String(val).trim();
+    
+    // If it starts with 0 and has length > 1, preserve as string (e.g., ZIP code, padded ID)
+    if (strVal.startsWith('0') && strVal.length > 1) {
+      return `'${strVal.replace(/'/g, "''")}'`;
     }
-    // Escape single quotes
-    return `'${String(val).replace(/'/g, "''")}'`;
+    
+    // Strict numeric check (integer or float)
+    const isStrictNumeric = /^-?\d+(\.\d+)?$/.test(strVal);
+    if (isStrictNumeric) {
+      return Number(strVal);
+    }
+    
+    // Escape single quotes and return as string literal
+    return `'${strVal.replace(/'/g, "''")}'`;
   }
 
   // Save changes (UPDATE)
@@ -76,14 +86,15 @@
     const setTerms = [];
     columns.forEach(col => {
       const formatted = formatSqlVal(editFormValues[col]);
-      setTerms.push(`${col} = ${formatted}`);
+      setTerms.push(`"${col.replace(/"/g, '""')}" = ${formatted}`);
     });
 
+    const escapedPkCol = `"${primaryKeyCol.replace(/"/g, '""')}"`;
     const whereClause = pkVal !== null && pkVal !== undefined
-      ? `${primaryKeyCol} = ${formatSqlVal(pkVal)}`
-      : columns.map((col, idx) => `${col} IS ${formatSqlVal(origRow[idx])}`).join(' AND ');
+      ? `${escapedPkCol} = ${formatSqlVal(pkVal)}`
+      : columns.map((col, idx) => `"${col.replace(/"/g, '""')}" IS ${formatSqlVal(origRow[idx])}`).join(' AND ');
 
-    const query = `UPDATE ${tableName} SET ${setTerms.join(', ')} WHERE ${whereClause};`;
+    const query = `UPDATE "${tableName.replace(/"/g, '""')}" SET ${setTerms.join(', ')} WHERE ${whereClause};`;
     
     addLog(query);
     const outcome = await onExecuteQuery(query);
@@ -102,11 +113,12 @@
     const pkIdx = columns.indexOf(primaryKeyCol);
     const pkVal = row[pkIdx];
 
+    const escapedPkCol = `"${primaryKeyCol.replace(/"/g, '""')}"`;
     const whereClause = pkVal !== null && pkVal !== undefined
-      ? `${primaryKeyCol} = ${formatSqlVal(pkVal)}`
-      : columns.map((col, idx) => `${col} IS ${formatSqlVal(row[idx])}`).join(' AND ');
+      ? `${escapedPkCol} = ${formatSqlVal(pkVal)}`
+      : columns.map((col, idx) => `"${col.replace(/"/g, '""')}" IS ${formatSqlVal(row[idx])}`).join(' AND ');
 
-    const query = `DELETE FROM ${tableName} WHERE ${whereClause};`;
+    const query = `DELETE FROM "${tableName.replace(/"/g, '""')}" WHERE ${whereClause};`;
     
     addLog(query);
     const outcome = await onExecuteQuery(query);
@@ -124,7 +136,7 @@
     columns.forEach(col => {
       const val = insertFormValues[col];
       if (val !== undefined && String(val).trim() !== '') {
-        insertCols.push(col);
+        insertCols.push(`"${col.replace(/"/g, '""')}"`);
         insertVals.push(formatSqlVal(val));
       }
     });
@@ -134,7 +146,7 @@
       return;
     }
 
-    const query = `INSERT INTO ${tableName} (${insertCols.join(', ')}) VALUES (${insertVals.join(', ')});`;
+    const query = `INSERT INTO "${tableName.replace(/"/g, '""')}" (${insertCols.join(', ')}) VALUES (${insertVals.join(', ')});`;
     
     addLog(query);
     const outcome = await onExecuteQuery(query);
@@ -153,7 +165,7 @@
       return;
     }
     if (!onExecuteQuery) return;
-    const query = `ALTER TABLE ${tableName} ADD COLUMN ${newColName.trim()} ${newColType};`;
+    const query = `ALTER TABLE "${tableName.replace(/"/g, '""')}" ADD COLUMN "${newColName.trim().replace(/"/g, '""')}" ${newColType};`;
     
     addLog(query);
     const outcome = await onExecuteQuery(query);
@@ -295,19 +307,19 @@
                 {#if editingRowIndex === globalIdx}
                   <div class="action-edit-group">
                     <button class="grid-act-btn save" onclick={() => saveRow(globalIdx)} title="Save changes">
-                      <Check size={11} />
+                      <Check size={14} />
                     </button>
                     <button class="grid-act-btn cancel" onclick={cancelEditing} title="Cancel editing">
-                      <X size={11} />
+                      <X size={14} />
                     </button>
                   </div>
                 {:else}
                   <div class="action-edit-group">
                     <button class="grid-act-btn edit" onclick={() => startEditing(globalIdx, row)} title="Edit row">
-                      <Edit2 size={11} />
+                      <Edit2 size={14} />
                     </button>
                     <button class="grid-act-btn delete" onclick={() => deleteRow(globalIdx)} title="Delete row">
-                      <Trash2 size={11} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 {/if}
@@ -382,7 +394,7 @@
 
   .search-icon {
     position: absolute;
-    left: 10px;
+    left: 12px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--color-muted);
@@ -390,30 +402,34 @@
 
   .filter-input {
     width: 100%;
-    height: 32px;
+    height: 36px;
     background: var(--color-canvas);
     border: 1px solid var(--color-hairline);
     border-radius: var(--radius-xs);
     color: var(--color-ink);
-    padding: 0 32px;
-    font-size: 12px;
+    padding: 0 36px;
+    font-size: 13px;
     outline: none;
     transition: all 0.2s;
   }
 
   .filter-input:focus {
     border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), 0.1);
   }
 
   .clear-search-btn {
     position: absolute;
-    right: 8px;
+    right: 12px;
     top: 50%;
     transform: translateY(-50%);
     background: transparent;
     border: none;
     color: var(--color-muted);
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .action-buttons-group {
@@ -422,10 +438,10 @@
   }
 
   .action-btn-gui {
-    height: 32px;
-    padding: 0 12px;
+    height: 36px;
+    padding: 0 14px;
     border-radius: var(--radius-xs);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     display: flex;
@@ -455,6 +471,7 @@
 
   .action-btn-gui.fill-btn:hover {
     opacity: 0.9;
+    transform: translateY(-1px);
   }
 
   /* Sub Panels */
@@ -462,10 +479,10 @@
     background: var(--color-tab-inactive);
     border: 1px solid var(--color-hairline);
     border-radius: var(--radius-xs);
-    padding: 12px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     flex-shrink: 0;
   }
 
@@ -481,42 +498,52 @@
     display: flex;
     gap: 8px;
     align-items: center;
+    flex-wrap: wrap;
   }
 
   .gui-input {
     background: var(--color-canvas);
     border: 1px solid var(--color-hairline);
     color: var(--color-ink);
-    font-size: 12px;
-    height: 28px;
-    padding: 0 8px;
-    border-radius: 4px;
+    font-size: 13px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 6px;
     outline: none;
+  }
+
+  .gui-input:focus {
+    border-color: var(--color-primary);
   }
 
   .gui-select {
     background: var(--color-canvas);
     border: 1px solid var(--color-hairline);
     color: var(--color-ink);
-    font-size: 11px;
-    height: 28px;
-    padding: 0 4px;
-    border-radius: 4px;
+    font-size: 12px;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: 6px;
   }
 
   .gui-form-btn {
-    height: 28px;
-    padding: 0 12px;
-    border-radius: 4px;
-    font-size: 11px;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 6px;
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     border: none;
+    transition: all 0.2s;
   }
 
   .gui-form-btn.apply {
     background: var(--color-primary);
     color: var(--color-canvas);
+  }
+
+  .gui-form-btn.apply:hover {
+    opacity: 0.9;
   }
 
   .gui-form-btn.cancel {
@@ -525,10 +552,14 @@
     border: 1px solid var(--color-hairline);
   }
 
+  .gui-form-btn.cancel:hover {
+    background: rgba(0,0,0,0.02);
+  }
+
   .insert-inputs-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
   }
 
   .input-field-group {
@@ -574,12 +605,12 @@
   .editor-grid {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .editor-grid th, .editor-grid td {
     border: 1px solid var(--color-hairline);
-    padding: 8px 12px;
+    padding: 10px 14px;
     text-align: left;
     white-space: nowrap;
   }
@@ -608,7 +639,7 @@
   }
 
   .actions-header {
-    width: 80px;
+    width: 100px;
     text-align: center !important;
   }
 
@@ -618,17 +649,17 @@
 
   .action-edit-group {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     justify-content: center;
   }
 
   .grid-act-btn {
-    width: 22px;
-    height: 22px;
+    width: 32px;
+    height: 32px;
     border: 1px solid var(--color-hairline);
     background: var(--color-card-bg);
     color: var(--color-muted);
-    border-radius: 4px;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -639,6 +670,7 @@
   .grid-act-btn:hover {
     color: var(--color-ink);
     border-color: var(--color-card-border);
+    transform: scale(1.05);
   }
 
   .grid-act-btn.save:hover {
@@ -657,11 +689,11 @@
     background: var(--color-canvas);
     border: 1px solid var(--color-primary);
     color: var(--color-ink);
-    font-size: 12px;
-    padding: 2px 6px;
+    font-size: 13px;
+    padding: 4px 8px;
     width: 100%;
     outline: none;
-    border-radius: 2px;
+    border-radius: 4px;
   }
 
   .cell-text-value.null-value {
@@ -712,5 +744,55 @@
     color: var(--color-primary);
     word-break: break-all;
     white-space: pre-wrap;
+  }
+
+  /* Mobile and Tablet optimization rules */
+  @media (max-width: 768px) {
+    .filter-input {
+      height: 44px;
+      font-size: 14px;
+      padding: 0 40px;
+    }
+    
+    .search-icon {
+      left: 14px;
+    }
+
+    .action-btn-gui {
+      height: 44px;
+      font-size: 14px;
+      padding: 0 16px;
+    }
+
+    .gui-input, .gui-select, .gui-form-btn {
+      height: 44px;
+      font-size: 14px;
+      border-radius: 8px;
+    }
+
+    .add-col-panel .form-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .add-col-panel .form-row > * {
+      width: 100%;
+    }
+
+    .grid-act-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+    }
+
+    .grid-act-btn :global(svg) {
+      width: 16px !important;
+      height: 16px !important;
+    }
+
+    .editor-grid th, .editor-grid td {
+      padding: 12px 16px;
+    }
   }
 </style>

@@ -16,7 +16,6 @@
   "dependencies": {
     "@codemirror/lang-python": "^6.2.1",
     "@codemirror/lang-sql": "^6.10.0",
-    "@lucide/svelte": "^1.17.0",
     "codemirror": "^6.0.2",
     "lucide-svelte": "^1.0.1"
   }

@@ -181,16 +181,14 @@
     let formatted = currentCode;
 
     if (language === 'sql') {
-      // Simple regex keyword uppercase formatter
-      const keywords = [
-        'select', 'from', 'where', 'join', 'inner', 'left', 'on', 'group by', 
-        'having', 'order by', 'limit', 'as', 'and', 'or', 'insert', 'into', 
-        'values', 'delete', 'update', 'set', 'with', 'intersect', 'except', 'union'
-      ];
+      // Safe regex keyword uppercase formatter ignoring comments and quotes
+      const sqlRegex = /(--.*)|('[^']*')|("[^"]*")|(\b(select|from|where|join|inner|left|on|group\s+by|having|order\s+by|limit|as|and|or|insert|into|values|delete|update|set|with|intersect|except|union)\b)/gi;
       
-      keywords.forEach(keyword => {
-        const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-        formatted = formatted.replace(regex, keyword.toUpperCase());
+      formatted = formatted.replace(sqlRegex, (match, comment, singleQuote, doubleQuote, keyword) => {
+        if (keyword) {
+          return keyword.toUpperCase();
+        }
+        return match;
       });
       // Add standard newlines after select list, from, where for style
       formatted = formatted.trim();

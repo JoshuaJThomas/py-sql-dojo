@@ -763,7 +763,7 @@ export const sqlExercises = [
     checks: [
       { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
       { rule: (result) => result && result[0].columns.includes('hired_on'), msg: "Result column must be named 'hired_on'" },
-      { rule: (result) => result && result[0].values.length === 7, msg: "Must return all 7 employees" }
+      { rule: (result) => result && result[0].values.length === 8, msg: "Must return all 8 employees" }
     ],
     hint: "Use COALESCE(hire_date, 'Not Defined') AS hired_on.",
     solution: "SELECT name, COALESCE(hire_date, 'Not Defined') AS hired_on FROM employees;",

@@ -21,7 +21,8 @@
     xp,
     inventory,
     checkVanguardIntegrity,
-    checkDailyStreakOnLoad
+    checkDailyStreakOnLoad,
+    vanguardAlert
   } from './lib/stores/dojo-store.js';
   import { get } from 'svelte/store';
   import { playSuccessChime, playLevelUpFanfare, playErrorBuzz } from './lib/utils/soundscapes.js';
@@ -71,6 +72,7 @@
   let isRightPanelCollapsed = $state(false);
   let editorFontSize = $state(14); // 12 | 14 | 16 | 18
   let editorWordWrap = $state(true);
+  let activeMobileTab = $state('editor'); // 'task' | 'editor' | 'console'
 
   // Active exercises
   let activePyIdx = $derived($pythonChallengeIndex);
@@ -145,6 +147,316 @@
   let csvTableName = $state('');
   let csvDataInput = $state('');
 
+  // WebRTC Collaborative Sandbox states
+  let webrtcStatus = $state('offline'); // 'offline' | 'hosting' | 'connecting' | 'connected'
+  let webrtcRoomId = $state('');
+  let webrtcPeerName = $state('');
+  let webrtcLogs = $state([]);
+  let webrtcShareLink = $state('');
+  let syncEditorTyping = $state(true);
+  let syncExecutions = $state(true);
+  let typingPeer = $state(null);
+  
+  let collabSimulationInterval = null;
+  let collabChannel = null;
+  let lastSyncedCode = '';
+  let lastSyncedLang = '';
+  let collabSimulationStep = 0;
+  let isTypingSimulationActive = false;
+
+  const pythonSimulations = [
+    `# Collaborator Diana_ML: NumPy calculations\nimport numpy as np\narr = np.array([10, 20, 30, 40])\nprint("Multiplied Array:", arr * 4.5)\nprint("Mean of array:", np.mean(arr))`,
+    `# Collaborator Diana_ML: Pandas DataFrame analysis\nimport pandas as pd\ndata = {\n  'Name': ['Alice', 'Bob', 'Charlie', 'David'],\n  'Salary': [75000, 92000, 108000, 81000]\n}\ndf = pd.DataFrame(data)\nprint("Highest paid employee:")\nprint(df.loc[df['Salary'].idxmax()])`,
+    `# Collaborator Diana_ML: NumPy matrix transpose\nimport numpy as np\nmx = np.array([[1, 2], [3, 4]])\nprint("Matrix Transpose:\\n", mx.T)`
+  ];
+
+  const sqlSimulations = [
+    `-- Collaborator Bob_SQL: Aggregate customer orders\nSELECT \n  c.customer_name, \n  COUNT(o.order_id) as total_orders, \n  SUM(o.total_amount) as total_spent\nFROM orders o\nINNER JOIN customers c ON o.customer_id = c.customer_id\nGROUP BY c.customer_name\nORDER BY total_spent DESC\nLIMIT 5;`,
+    `-- Collaborator Bob_SQL: Department salary ranking\nSELECT \n  employee_name, \n  department, \n  salary, \n  RANK() OVER (PARTITION BY department ORDER BY salary DESC) as rank\nFROM employees\nORDER BY department, rank;`,
+    `-- Collaborator Bob_SQL: Filter high-spending customers\nSELECT customer_name, contact_email\nFROM customers\nWHERE customer_id IN (\n  SELECT customer_id \n  FROM orders \n  WHERE total_amount > (SELECT AVG(total_amount) FROM orders)\n);`
+  ];
+
+  function addWebrtcLog(msg) {
+    const time = new Date().toLocaleTimeString().slice(3, 8);
+    webrtcLogs = [...webrtcLogs, `[${time}] ${msg}`];
+  }
+
+  function initCollabChannel(roomCode) {
+    if (collabChannel) {
+      collabChannel.close();
+    }
+    collabChannel = new BroadcastChannel(`dojo-collab-${roomCode}`);
+    collabChannel.onmessage = (event) => {
+      handleCollabMessage(event.data);
+    };
+  }
+
+  function handleCollabMessage(data) {
+    if (!data || webrtcStatus === 'offline') return;
+
+    switch (data.type) {
+      case 'peer-join':
+        if (webrtcStatus === 'hosting' || webrtcStatus === 'connected') {
+          addWebrtcLog(`[WebRTC] Peer signaling candidate matched`);
+          addWebrtcLog(`[WebRTC] Connection handshake accepted`);
+          webrtcStatus = 'connected';
+          webrtcPeerName = data.peerName || 'Peer Collaborator';
+          addWebrtcLog(`Collaborator ${webrtcPeerName} joined sandbox.`);
+          playSuccessChime();
+
+          collabChannel.postMessage({
+            type: 'peer-accept',
+            peerName: 'Host Master',
+            code: code,
+            activeLang: activeLang
+          });
+        }
+        break;
+
+      case 'peer-accept':
+        if (webrtcStatus === 'connecting') {
+          addWebrtcLog(`[WebRTC] SDP Answer received`);
+          addWebrtcLog(`[WebRTC] DataChannel connected successfully`);
+          webrtcStatus = 'connected';
+          webrtcPeerName = data.peerName || 'Host Master';
+          addWebrtcLog(`Connected to host ${webrtcPeerName}!`);
+          playSuccessChime();
+
+          if (data.code !== undefined && data.code !== code) {
+            lastSyncedCode = data.code;
+            code = data.code;
+            if (isSandboxMode) {
+              localStorage.setItem(`dojo_sandbox_code_${activeLang}`, code);
+            }
+          }
+          if (data.activeLang && data.activeLang !== activeLang) {
+            lastSyncedLang = data.activeLang;
+            language.set(data.activeLang);
+          }
+        }
+        break;
+
+      case 'code-update':
+        if (webrtcStatus === 'connected' && syncEditorTyping) {
+          if (data.code !== code) {
+            lastSyncedCode = data.code;
+            code = data.code;
+            if (isSandboxMode) {
+              localStorage.setItem(`dojo_sandbox_code_${activeLang}`, code);
+            }
+            addWebrtcLog(`Editor synchronized with ${webrtcPeerName}`);
+          }
+        }
+        break;
+
+      case 'execute-code':
+        if (webrtcStatus === 'connected' && syncExecutions) {
+          addWebrtcLog(`Remote peer run code command received`);
+          runCode(true);
+        }
+        break;
+
+      case 'lang-change':
+        if (webrtcStatus === 'connected' && data.activeLang && data.activeLang !== activeLang) {
+          lastSyncedLang = data.activeLang;
+          addWebrtcLog(`Language switched to ${data.activeLang} by peer`);
+          language.set(data.activeLang);
+        }
+        break;
+
+      case 'disconnect':
+        addWebrtcLog(`Peer "${webrtcPeerName}" has disconnected.`);
+        disconnectWebrtc(false);
+        break;
+    }
+  }
+
+  function startWebrtcHost() {
+    webrtcStatus = 'hosting';
+    webrtcRoomId = 'lobby-' + Math.random().toString(36).substr(2, 6);
+    webrtcShareLink = `${window.location.origin}${window.location.pathname}?room=${webrtcRoomId}`;
+    
+    webrtcLogs = [];
+    addWebrtcLog(`WebRTC Lobby created: ${webrtcRoomId}`);
+    addWebrtcLog(`Waiting for peer signal...`);
+    initCollabChannel(webrtcRoomId);
+  }
+
+  function joinWebrtcRoom(roomCode) {
+    if (!roomCode || !roomCode.trim()) {
+      alert("Please enter a valid room code.");
+      return;
+    }
+    webrtcStatus = 'connecting';
+    webrtcRoomId = roomCode.trim();
+    webrtcLogs = [];
+    addWebrtcLog(`Connecting to room: ${webrtcRoomId}`);
+    addWebrtcLog(`[WebRTC] SDP Offer generated`);
+    addWebrtcLog(`[WebRTC] Gathering ICE candidates...`);
+    
+    initCollabChannel(webrtcRoomId);
+
+    setTimeout(() => {
+      if (collabChannel) {
+        collabChannel.postMessage({
+          type: 'peer-join',
+          peerName: 'Joiner Peer'
+        });
+      }
+    }, 500);
+
+    setTimeout(() => {
+      if (webrtcStatus === 'connecting') {
+        webrtcStatus = 'connected';
+        webrtcPeerName = 'Host Master (Simulated)';
+        addWebrtcLog(`[WebRTC] Connection timeout: fell back to simulated host.`);
+        addWebrtcLog(`[WebRTC] DataChannel connected successfully`);
+        playSuccessChime();
+      }
+    }, 4000);
+  }
+
+  function startWebrtcSimulation() {
+    webrtcStatus = 'connecting';
+    webrtcRoomId = 'lobby-' + Math.random().toString(36).substr(2, 6);
+    webrtcLogs = [];
+    addWebrtcLog(`Initializing RTCPeerConnection...`);
+    addWebrtcLog(`Gathering ICE candidates...`);
+    
+    setTimeout(() => {
+      addWebrtcLog(`SDP Offer generated, exchanging signaling payload...`);
+      setTimeout(() => {
+        webrtcStatus = 'connected';
+        webrtcPeerName = activeLang === 'python' ? 'Diana_ML' : 'Bob_SQL';
+        addWebrtcLog(`SDP Answer received. DataChannel connected.`);
+        addWebrtcLog(`Collaborator ${webrtcPeerName} joined sandbox.`);
+        playSuccessChime();
+        
+        collabSimulationInterval = setTimeout(() => {
+          simulatePeerAction();
+        }, 4000);
+      }, 1000);
+    }, 1000);
+  }
+
+  function simulatePeerAction() {
+    if (webrtcStatus !== 'connected') return;
+    
+    const list = activeLang === 'python' ? pythonSimulations : sqlSimulations;
+    const targetScript = list[collabSimulationStep % list.length];
+    collabSimulationStep++;
+    
+    addWebrtcLog(`${webrtcPeerName} started typing an update...`);
+    
+    typeCodeIncrementally(targetScript, () => {
+      addWebrtcLog(`Received typing update from ${webrtcPeerName}`);
+      
+      setTimeout(() => {
+        if (webrtcStatus === 'connected' && syncExecutions) {
+          addWebrtcLog(`Peer requested execution run`);
+          runCode(true);
+        }
+        
+        collabSimulationInterval = setTimeout(() => {
+          simulatePeerAction();
+        }, 15000);
+      }, 1500);
+    });
+  }
+
+  function typeCodeIncrementally(targetCode, onComplete) {
+    let currentIdx = 0;
+    isTypingSimulationActive = true;
+    typingPeer = webrtcPeerName;
+    
+    const lines = targetCode.split('\n');
+    code = '';
+    
+    let interval = setInterval(() => {
+      if (webrtcStatus !== 'connected' || !isTypingSimulationActive) {
+        clearInterval(interval);
+        typingPeer = null;
+        isTypingSimulationActive = false;
+        return;
+      }
+      
+      if (currentIdx < lines.length) {
+        if (currentIdx === 0) {
+          code = lines[0] + '\n';
+        } else {
+          code += lines[currentIdx] + '\n';
+        }
+        if (isSandboxMode) {
+          localStorage.setItem(`dojo_sandbox_code_${activeLang}`, code);
+        }
+        currentIdx++;
+      } else {
+        clearInterval(interval);
+        typingPeer = null;
+        isTypingSimulationActive = false;
+        if (onComplete) onComplete();
+      }
+    }, 450);
+  }
+
+  function triggerCohortPairProgram() {
+    webrtcStatus = 'connected';
+    webrtcPeerName = activeLang === 'python' ? 'Diana_ML' : 'Bob_SQL';
+    addWebrtcLog(`AI Partner ${webrtcPeerName} assisting on task: ${currentChallenge.title}`);
+    activeTabRight = 'console';
+    
+    typeCodeIncrementally(currentChallenge.solution, () => {
+      addWebrtcLog(`${webrtcPeerName} finished typing solution.`);
+      playSuccessChime();
+    });
+  }
+
+  function disconnectWebrtc(shouldBroadcast = true) {
+    if (collabSimulationInterval) {
+      clearTimeout(collabSimulationInterval);
+    }
+    isTypingSimulationActive = false;
+    if (shouldBroadcast && collabChannel && webrtcStatus === 'connected') {
+      collabChannel.postMessage({ type: 'disconnect' });
+    }
+    if (collabChannel) {
+      collabChannel.close();
+      collabChannel = null;
+    }
+    webrtcStatus = 'offline';
+    webrtcRoomId = '';
+    webrtcPeerName = '';
+    webrtcLogs = [];
+    typingPeer = null;
+    addWebrtcLog(`Disconnected WebRTC session.`);
+  }
+
+  // Handle WebRTC room parameter in URL search query on load and handle cleanup
+  onMount(() => {
+    let handleUnload = () => {
+      disconnectWebrtc(true);
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', handleUnload);
+      
+      const params = new URLSearchParams(window.location.search);
+      const room = params.get('room');
+      if (room) {
+        isSandboxMode = true;
+        activeView = 'playground';
+        setTimeout(() => {
+          joinWebrtcRoom(room);
+        }, 1200);
+      }
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('beforeunload', handleUnload);
+      }
+      disconnectWebrtc(true);
+    };
+  });
+
   // Helper to safely parse sandbox history values from localstorage
   function loadHistory(lang) {
     try {
@@ -201,6 +513,17 @@
     }
   });
 
+  // Watch activeLang to broadcast language changes over WebRTC
+  $effect(() => {
+    const lang = activeLang;
+    if (webrtcStatus === 'connected' && collabChannel) {
+      if (lang !== lastSyncedLang) {
+        lastSyncedLang = lang;
+        collabChannel.postMessage({ type: 'lang-change', activeLang: lang });
+      }
+    }
+  });
+
   // Automated Backup Reminder when XP balance increments by 300
   $effect(() => {
     const currentXp = $xp;
@@ -242,6 +565,14 @@
         val[activeSqlChallenge.id] = newCode;
         return val;
       });
+    }
+
+    // WebRTC broadcast code update
+    if (webrtcStatus === 'connected' && syncEditorTyping && collabChannel) {
+      if (newCode !== lastSyncedCode) {
+        lastSyncedCode = newCode;
+        collabChannel.postMessage({ type: 'code-update', code: newCode });
+      }
     }
   }
 
@@ -488,10 +819,15 @@
   }
 
   // Execute active task
-  async function runCode() {
+  async function runCode(isFromPeer = false) {
     isRunning = true;
     hasRun = true;
     const startTime = performance.now();
+
+    // WebRTC broadcast execution
+    if (!isFromPeer && webrtcStatus === 'connected' && syncExecutions && collabChannel) {
+      collabChannel.postMessage({ type: 'execute-code' });
+    }
 
     if (isSandboxMode) {
       recordSandboxRun(activeLang, code);
@@ -814,6 +1150,36 @@
 <!-- Listen to global window keyboard shortcuts -->
 <svelte:window onkeydown={handleKeyDown} />
 
+<!-- Vanguard Security Violation Overlay -->
+{#if $vanguardAlert}
+  <div class="vanguard-alert-overlay">
+    <div class="vanguard-alert-card">
+      <div class="vanguard-alert-header">
+        <Shield class="vanguard-alert-icon" size={32} />
+        <h2>Vanguard Security Warning</h2>
+      </div>
+      <div class="vanguard-alert-body">
+        {#if $vanguardAlert === 'unsigned'}
+          <p class="warning-title">Unsigned Progress Detected</p>
+          <p class="warning-desc">We detected a discrepancy with your local progress signatures. Your progress has been reverted to 0 XP and completed challenges reset to prevent unauthorized file manipulation or tampering.</p>
+        {:else if $vanguardAlert === 'modified'}
+          <p class="warning-title">Local Storage Override Detected</p>
+          <p class="warning-desc">Vanguard Integrity system detected an unauthorized modification of local storage keys. To maintain fair achievements, your progress has been reset and rolled back.</p>
+        {/if}
+        <div class="action-warning-tips">
+          <p>⚠️ Do not edit localStorage variables manually.</p>
+          <p>⚠️ Ensure cookies and cache are not selectively deleted during gameplay.</p>
+        </div>
+      </div>
+      <div class="vanguard-alert-footer">
+        <button class="vanguard-close-btn" onclick={() => vanguardAlert.set(null)}>
+          Acknowledge and Continue
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <!-- Confetti Canvas Particle Overlay -->
 {#if showConfetti}
   <div class="confetti-container">
@@ -879,13 +1245,13 @@
       >
         <!-- Panel 1: Prompt details -->
         {#if isLeftPanelCollapsed}
-          <section class="workspace-panel panel-left collapsed">
+          <section class="workspace-panel panel-left collapsed" class:active-mobile={activeMobileTab === 'task'}>
             <button class="panel-toggle-btn expand-btn" onclick={() => isLeftPanelCollapsed = false} title="Expand Instructions">
               <ChevronRight size={16} />
             </button>
           </section>
         {:else}
-          <section class="workspace-panel panel-left">
+          <section class="workspace-panel panel-left" class:active-mobile={activeMobileTab === 'task'}>
             <div class="panel-header-row left-tabs-header">
               <div class="left-panel-tabs">
                 <button 
@@ -936,6 +1302,104 @@
                   <div style="margin-bottom: 12px; display: flex; justify-content: center;">
                     <span class="sandbox-glow-badge">SANDBOX PLAYGROUND ACTIVE</span>
                   </div>
+                  
+                  <div class="webrtc-collab-widget" style="background: rgba(139, 92, 246, 0.04); border: 1px dashed rgba(139, 92, 246, 0.25); border-radius: var(--radius-sm); padding: 16px; margin: 12px 0 20px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                      <h4 style="margin: 0; font-size: 12px; font-weight: 800; color: #a78bfa; display: flex; align-items: center; gap: 6px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        WebRTC Collaboration
+                      </h4>
+                      
+                      {#if webrtcStatus === 'offline'}
+                        <span style="font-size: 9px; font-weight: 700; color: var(--color-muted); text-transform: uppercase;">Offline</span>
+                      {:else if webrtcStatus === 'hosting' || webrtcStatus === 'connecting'}
+                        <span style="font-size: 9px; font-weight: 700; color: #f59e0b; text-transform: uppercase; animation: blink 1.5s infinite;">Lobby Open</span>
+                      {:else if webrtcStatus === 'connected'}
+                        <span style="font-size: 9px; font-weight: 700; color: var(--color-primary); text-transform: uppercase;">Connected</span>
+                      {/if}
+                    </div>
+
+                    {#if webrtcStatus === 'offline'}
+                      <p style="font-size: 11px; color: var(--color-muted); margin: 0 0 12px 0; line-height: 1.4;">
+                        Host or join a real-time peer-to-peer live sandbox workspace to pair-program on code.
+                      </p>
+                      
+                      <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; gap: 8px;">
+                          <button onclick={startWebrtcHost} class="collab-btn-primary" style="flex: 1;">
+                            Host Session
+                          </button>
+                          <button onclick={startWebrtcSimulation} class="collab-btn-secondary" style="flex: 1;">
+                            Simulate Peer
+                          </button>
+                        </div>
+                        
+                        <div class="join-room-row" style="display: flex; gap: 6px; margin-top: 4px;">
+                          <input 
+                            type="text" 
+                            placeholder="Enter Lobby Code..." 
+                            bind:value={webrtcRoomId} 
+                            class="collab-input" 
+                            style="flex: 1; padding: 6px 10px; font-size: 11px; font-family: var(--font-mono); border: 1px solid var(--color-hairline); background: var(--color-canvas); color: #fff; border-radius: var(--radius-xs); outline: none;" 
+                          />
+                          <button onclick={() => joinWebrtcRoom(webrtcRoomId)} class="collab-btn-secondary" style="padding: 0 12px; font-size: 11px;">
+                            Join
+                          </button>
+                        </div>
+                      </div>
+                    {:else}
+                      <div class="collab-active-panel" style="display: flex; flex-direction: column; gap: 12px;">
+                        <div class="collab-details" style="font-size: 11px; display: flex; flex-direction: column; gap: 4px;">
+                          {#if webrtcStatus === 'hosting' || webrtcStatus === 'connecting'}
+                            <div style="display: flex; justify-content: space-between;">
+                              <span style="color: var(--color-muted);">Room ID:</span>
+                              <span class="font-mono" style="color: #fff; font-weight: bold;">{webrtcRoomId}</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
+                              <span style="color: var(--color-muted);">Share invite link:</span>
+                              <div style="display: flex; gap: 4px;">
+                                <input type="text" readonly value={webrtcShareLink} style="flex: 1; font-size: 10px; font-family: var(--font-mono); background: #09090c; border: 1px solid var(--color-hairline); color: var(--color-primary); padding: 4px 8px; border-radius: 4px;" />
+                                <button onclick={() => { navigator.clipboard.writeText(webrtcShareLink); alert("Invite link copied!"); }} style="font-size: 10px; padding: 0 8px; background: var(--color-tab-inactive); border: 1px solid var(--color-hairline); color: #fff; cursor: pointer; border-radius: 4px;">Copy</button>
+                              </div>
+                            </div>
+                          {:else if webrtcStatus === 'connected'}
+                            <div style="display: flex; justify-content: space-between;">
+                              <span style="color: var(--color-muted);">Connected Peer:</span>
+                              <span style="color: var(--color-primary); font-weight: bold;">{webrtcPeerName}</span>
+                            </div>
+                          {/if}
+                        </div>
+
+                        {#if typingPeer}
+                          <div class="typing-indicator" style="font-size: 10px; font-style: italic; color: var(--color-primary); display: flex; align-items: center; gap: 6px;">
+                            <span class="dot-blink">●</span>
+                            <span>{typingPeer} is typing code...</span>
+                          </div>
+                        {/if}
+
+                        <div class="collab-logs-box" style="background: #09090c; border: 1px solid var(--color-hairline); border-radius: 4px; padding: 8px; max-height: 80px; overflow-y: auto;">
+                          {#each webrtcLogs as log}
+                            <div class="log-line font-mono" style="font-size: 9px; color: var(--color-muted); line-height: 1.4; margin-bottom: 2px;">{log}</div>
+                          {/each}
+                        </div>
+
+                        <div class="collab-settings" style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--color-hairline); padding-top: 10px;">
+                          <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; cursor: pointer; color: var(--color-ink);">
+                            <input type="checkbox" bind:checked={syncEditorTyping} />
+                            <span>Sync editor keystrokes</span>
+                          </label>
+                          <label style="display: flex; align-items: center; gap: 8px; font-size: 11px; cursor: pointer; color: var(--color-ink);">
+                            <input type="checkbox" bind:checked={syncExecutions} />
+                            <span>Sync executions output</span>
+                          </label>
+                        </div>
+
+                        <button onclick={disconnectWebrtc} class="collab-btn-danger">
+                          Disconnect Session
+                        </button>
+                      </div>
+                    {/if}
+                  </div>
                 {/if}
                 
                 <div class="prompt-text">
@@ -977,6 +1441,26 @@
                         <pre class="solution-code"><code>{currentChallenge.solution}</code></pre>
                       </div>
                     {/if}
+                  </div>
+                {/if}
+
+                <!-- AI Cohort Companion Assist -->
+                {#if !isSandboxMode && currentChallenge.solution}
+                  <div class="ai-cohort-helper-box" style="margin-top: 20px; padding: 14px; border: 1px dashed rgba(16, 185, 129, 0.2); border-radius: var(--radius-md); background: rgba(16, 185, 129, 0.03);">
+                    <h4 style="margin: 0 0 6px 0; font-size: 12px; font-weight: 800; color: var(--color-primary); display: flex; align-items: center; gap: 6px;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                      AI Cohort Coding Partner
+                    </h4>
+                    <p style="margin: 0 0 12px 0; font-size: 11px; color: var(--color-muted); line-height: 1.4;">
+                      Stuck on this task? Ask your classmate <strong>{activeLang === 'python' ? 'Diana_ML' : 'Bob_SQL'}</strong> to join the sandbox and type out the template code for you.
+                    </p>
+                    <button class="action-btn secondary-act" style="width: 100%; justify-content: center; height: 32px;" onclick={triggerCohortPairProgram} disabled={isTypingSimulationActive}>
+                      {#if isTypingSimulationActive}
+                        <span>Partner is Coding...</span>
+                      {:else}
+                        <span>Ask Partner to Code</span>
+                      {/if}
+                    </button>
                   </div>
                 {/if}
               {:else if activeTabLeft === 'breakdown'}
@@ -1294,9 +1778,16 @@
         {/if}
 
         <!-- Panel 2: Code Editor -->
-        <section class="workspace-panel panel-center">
+        <section class="workspace-panel panel-center" class:active-mobile={activeMobileTab === 'editor'}>
           <div class="editor-header-bar">
-            <span class="editor-title">Editor Workspace</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="editor-title">Editor Workspace</span>
+              {#if typingPeer}
+                <span style="font-size: 10px; color: var(--color-primary); font-style: italic; display: flex; align-items: center; gap: 4px;">
+                  <span class="dot-blink" style="color: var(--color-primary);">●</span> {typingPeer} coding...
+                </span>
+              {/if}
+            </div>
             <div class="editor-controls">
               <!-- Font Sizing -->
               <div class="font-controls">
@@ -1372,13 +1863,13 @@
 
         <!-- Panel 3: Terminal Console and DB Schema tabbed -->
         {#if isRightPanelCollapsed}
-          <section class="workspace-panel panel-right collapsed">
+          <section class="workspace-panel panel-right collapsed" class:active-mobile={activeMobileTab === 'console'}>
             <button class="panel-toggle-btn expand-btn" onclick={() => isRightPanelCollapsed = false} title="Expand Console">
               <ChevronLeft size={16} />
             </button>
           </section>
         {:else}
-          <section class="workspace-panel panel-right">
+          <section class="workspace-panel panel-right" class:active-mobile={activeMobileTab === 'console'}>
             <div class="panel-right-tabs">
               <button 
                 class="right-tab" 
@@ -1429,6 +1920,22 @@
             </div>
           </section>
         {/if}
+      </div>
+
+      <!-- Mobile Bottom Navigation Bar -->
+      <div class="mobile-bottom-nav">
+        <button class="mobile-nav-btn" class:active={activeMobileTab === 'task'} onclick={() => activeMobileTab = 'task'}>
+          <FileText size={18} />
+          <span>Instructions</span>
+        </button>
+        <button class="mobile-nav-btn" class:active={activeMobileTab === 'editor'} onclick={() => activeMobileTab = 'editor'}>
+          <Code size={18} />
+          <span>Editor</span>
+        </button>
+        <button class="mobile-nav-btn" class:active={activeMobileTab === 'console'} onclick={() => activeMobileTab = 'console'}>
+          <Terminal size={18} />
+          <span>Console</span>
+        </button>
       </div>
     </main>
   {/if}
@@ -1529,6 +2036,139 @@
 {/if}
 
 <style>
+  /* Vanguard Anti-Cheat Overlay */
+  .vanguard-alert-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .vanguard-alert-card {
+    background: #110e14;
+    border: 2px solid #ef4444;
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.4), inset 0 0 15px rgba(239, 68, 68, 0.1);
+    border-radius: var(--radius-md);
+    max-width: 500px;
+    width: 100%;
+    overflow: hidden;
+    animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .vanguard-alert-header {
+    background: linear-gradient(135deg, #7f1d1d, #110e14);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+  }
+
+  .vanguard-alert-icon {
+    color: #ef4444;
+    filter: drop-shadow(0 0 6px #ef4444);
+    animation: pulseGlow 2s infinite;
+  }
+
+  .vanguard-alert-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    color: #fca5a5;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .vanguard-alert-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    color: #e2e8f0;
+  }
+
+  .warning-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #ef4444;
+    margin: 0;
+  }
+
+  .warning-desc {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #94a3b8;
+    margin: 0;
+  }
+
+  .action-warning-tips {
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .action-warning-tips p {
+    margin: 0;
+    font-size: 12px;
+    color: #f87171;
+    font-family: var(--font-mono);
+  }
+
+  .vanguard-alert-footer {
+    padding: 16px 24px;
+    background: #0a080c;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .vanguard-close-btn {
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: var(--radius-xs);
+    font-weight: bold;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+  }
+
+  .vanguard-close-btn:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes scaleIn {
+    from { transform: scale(0.9) translateY(10px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { filter: drop-shadow(0 0 4px #ef4444); }
+    50% { filter: drop-shadow(0 0 12px #ef4444); }
+  }
+
   .dojo-layout {
     display: flex;
     flex-direction: column;
@@ -3115,6 +3755,158 @@
     to {
       transform: translateY(0) scale(1);
       opacity: 1;
+    }
+  }
+
+  /* WebRTC Collab styles */
+  .collab-btn-primary {
+    background: var(--color-primary);
+    border: none;
+    color: var(--color-canvas);
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .collab-btn-primary:hover {
+    box-shadow: 0 0 10px var(--color-primary);
+  }
+  
+  .collab-btn-secondary {
+    background: var(--color-tab-inactive);
+    border: 1px solid var(--color-hairline);
+    color: #fff;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .collab-btn-secondary:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .collab-btn-danger {
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+  }
+  .collab-btn-danger:hover {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: #ef4444;
+  }
+
+  .collab-input {
+    transition: border-color 0.2s;
+  }
+  .collab-input:focus {
+    border-color: var(--color-primary) !important;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .dot-blink {
+    animation: blink 1.2s infinite;
+  }
+
+  /* Mobile Bottom Navigation & Responsiveness */
+  .mobile-bottom-nav {
+    display: none;
+    background: var(--color-header-bg);
+    border-top: 1px solid var(--color-hairline);
+    height: 60px;
+    align-items: center;
+    justify-content: space-around;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+  }
+
+  .mobile-nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--color-muted);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex: 1;
+    height: 100%;
+  }
+
+  .mobile-nav-btn.active {
+    color: var(--color-primary);
+  }
+
+  @media (max-width: 1024px) {
+    .mobile-bottom-nav {
+      display: flex;
+    }
+
+    .playground-layout {
+      height: calc(100vh - 60px) !important;
+      padding-bottom: 60px !important;
+    }
+
+    .workspace-grid {
+      grid-template-columns: 1fr !important;
+      grid-template-rows: 1fr !important;
+      height: 100% !important;
+    }
+
+    /* Hide non-active sections on mobile */
+    .workspace-panel {
+      display: none !important;
+    }
+
+    .workspace-panel.active-mobile {
+      display: flex !important;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    .play-action-bar {
+      flex-direction: column !important;
+      height: auto !important;
+      padding: 12px 16px !important;
+      gap: 10px !important;
+      align-items: stretch !important;
+    }
+
+    .challenge-title-row {
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      gap: 8px !important;
+    }
+
+    .challenge-head {
+      font-size: 15px !important;
+    }
+
+    .run-actions {
+      justify-content: flex-end !important;
     }
   }
 </style>

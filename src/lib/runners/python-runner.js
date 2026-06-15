@@ -1,76 +1,81 @@
-let pyodidePromise = null;
+let worker = null;
+let workerInitPromise = null;
+let nextMessageId = 0;
+const pendingPromises = new Map();
 
-export function loadPyodideInstance() {
-  if (pyodidePromise) return pyodidePromise;
+function createPythonWorker() {
+  const workerCode = `
+    let pyodidePromise = null;
+    let pyodide = null;
 
-  pyodidePromise = new Promise((resolve, reject) => {
-    if (window.loadPyodide) {
-      window.loadPyodide({
+    importScripts("https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js");
+
+    async function loadPyodideInstance() {
+      if (pyodidePromise) return pyodidePromise;
+      pyodidePromise = self.loadPyodide({
         indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/"
-      }).then(resolve).catch(reject);
-      return;
+      }).then(instance => {
+        pyodide = instance;
+        return pyodide;
+      });
+      return pyodidePromise;
     }
 
-    const script = document.createElement('script');
-    script.src = "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js";
-    script.onload = () => {
-      window.loadPyodide({
-        indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/"
-      }).then(resolve).catch(reject);
-    };
-    script.onerror = () => {
-      reject(new Error("Failed to load Pyodide from CDN."));
-    };
-    document.head.appendChild(script);
-  });
+    self.onmessage = async (e) => {
+      const { type, id, preludeCode, code, checks } = e.data;
 
-  return pyodidePromise;
-}
+      if (type === 'init') {
+        try {
+          await loadPyodideInstance();
+          self.postMessage({ type: 'init_ok', id });
+        } catch (err) {
+          self.postMessage({ type: 'init_err', id, error: err.message });
+        }
+        return;
+      }
 
-export async function runPythonCode(preludeCode, code, checks = []) {
-  const pyodide = await loadPyodideInstance();
+      try {
+        const py = await loadPyodideInstance();
 
-  // Reset globals/variables in the pyodide namespace
-  pyodide.globals.clear();
+        if (type === 'runPythonCode') {
+          py.globals.clear();
 
-  // Set up sys.stdout capture
-  let stdoutContent = "";
-  pyodide.setStdout({
-    write: (text) => {
-      stdoutContent += text;
-      return text.length;
-    }
-  });
+          let stdoutContent = "";
+          py.setStdout({
+            write: (text) => {
+              stdoutContent += text;
+              return text.length;
+            }
+          });
 
-  let error = null;
-  let success = false;
+          let error = null;
+          let success = false;
 
-  try {
-    // 1. Load packages from imports and run the prelude code to define inputs (like nums, matrix, df, X, y)
-    if (preludeCode) {
-      await pyodide.loadPackagesFromImports(preludeCode);
-      await pyodide.runPythonAsync(preludeCode);
-    }
-    
-    // 2. Load packages from user imports and run user code
-    await pyodide.loadPackagesFromImports(code);
-    await pyodide.runPythonAsync(code);
-    success = true;
-  } catch (err) {
-    error = err.message;
-    success = false;
-  }
+          try {
+            if (preludeCode) {
+              await py.loadPackagesFromImports(preludeCode);
+              await py.runPythonAsync(preludeCode);
+            }
+            
+            await py.loadPackagesFromImports(code);
+            await py.runPythonAsync(code);
+            success = true;
+          } catch (err) {
+            error = err.message;
+            success = false;
+          } finally {
+            try {
+              py.setStdout({ write: () => {} });
+            } catch (e) {}
+          }
 
-  // 3. Evaluate each check assertion individually
-  let checksResults = [];
-  let checksPassed = true;
+          let checksResults = [];
+          let checksPassed = true;
 
-  if (success && checks.length > 0) {
-    try {
-      // Inject checks array as a JSON string to Pyodide
-      pyodide.globals.set("__checks_json_str__", JSON.stringify(checks));
-      
-      const evaluatorCode = `
+          if (success && checks && checks.length > 0) {
+            try {
+              py.globals.set("__checks_json_str__", JSON.stringify(checks));
+              const evaluatorCode = \`
 import json
 __checks_list__ = json.loads(__checks_json_str__)
 __results_list__ = []
@@ -92,7 +97,6 @@ for c in __checks_list__:
             pass
 
     try:
-        # Run the assertion in the global scope
         try:
             val = eval(test_str, globals())
             if hasattr(val, 'any'):
@@ -141,68 +145,169 @@ for c in __checks_list__:
         })
 
 __results_json__ = json.dumps(__results_list__)
-`;
-      await pyodide.runPythonAsync(evaluatorCode);
-      
-      const resultsJson = pyodide.globals.get("__results_json__");
-      checksResults = JSON.parse(resultsJson);
-      checksPassed = checksResults.every(r => r.passed);
-    } catch (err) {
-      console.error("Dojo check runner failed: ", err);
-      checksPassed = false;
-      checksResults = [{ passed: false, msg: `Dojo Test Harness Error: ${err.message}` }];
-    }
-  }
+\`;
+              await py.runPythonAsync(evaluatorCode);
+              const resultsJson = py.globals.get("__results_json__");
+              checksResults = JSON.parse(resultsJson);
+              checksPassed = checksResults.every(r => r.passed);
+            } catch (err) {
+              checksPassed = false;
+              checksResults = [{ passed: false, msg: \\\`Dojo Test Harness Error: \\\${err.message}\\\` }];
+            }
+          }
 
-  return {
-    success,
-    stdout: stdoutContent,
-    error,
-    checksPassed,
-    checksResults
+          self.postMessage({
+            type: 'runPythonCode_res',
+            id,
+            success,
+            stdout: stdoutContent,
+            error,
+            checksPassed,
+            checksResults
+          });
+
+        } else if (type === 'runPythonCell') {
+          let stdoutContent = "";
+          py.setStdout({
+            write: (text) => {
+              stdoutContent += text;
+              return text.length;
+            }
+          });
+
+          let error = null;
+          let success = false;
+          let resultRepr = "";
+          let result = null;
+
+          try {
+            await py.loadPackagesFromImports(code);
+            result = await py.runPythonAsync(code);
+            success = true;
+            if (result !== undefined && result !== null) {
+              if (typeof result.toJs === 'function') {
+                try {
+                  resultRepr = JSON.stringify(result.toJs(), null, 2);
+                } catch (e) {
+                  resultRepr = String(result);
+                }
+              } else {
+                resultRepr = String(result);
+              }
+            }
+          } catch (err) {
+            error = err.message;
+            success = false;
+          } finally {
+            if (result && typeof result.destroy === 'function') {
+              result.destroy();
+            }
+            try {
+              py.setStdout({ write: () => {} });
+            } catch (e) {}
+          }
+
+          self.postMessage({
+            type: 'runPythonCell_res',
+            id,
+            success,
+            stdout: stdoutContent,
+            error,
+            resultRepr
+          });
+        }
+      } catch (err) {
+        self.postMessage({
+          type: 'error',
+          id,
+          error: err.message
+        });
+      }
+    };
+  `;
+
+  const blob = new Blob([workerCode], { type: 'application/javascript' });
+  const workerUrl = URL.createObjectURL(blob);
+  const w = new Worker(workerUrl);
+
+  w.onmessage = (e) => {
+    const { type, id, error, success, stdout, checksPassed, checksResults, resultRepr } = e.data;
+    const pending = pendingPromises.get(id);
+    if (!pending) return;
+
+    if (type === 'init_ok') {
+      pending.resolve();
+      pendingPromises.delete(id);
+    } else if (type === 'init_err') {
+      pending.reject(new Error(error));
+      pendingPromises.delete(id);
+    } else if (type === 'runPythonCode_res') {
+      pending.resolve({
+        success,
+        stdout,
+        error,
+        checksPassed,
+        checksResults
+      });
+      pendingPromises.delete(id);
+    } else if (type === 'runPythonCell_res') {
+      pending.resolve({
+        success,
+        stdout,
+        error,
+        resultRepr
+      });
+      pendingPromises.delete(id);
+    } else if (type === 'error') {
+      pending.reject(new Error(error));
+      pendingPromises.delete(id);
+    }
   };
+
+  return w;
 }
 
-export async function runPythonCell(code) {
-  const pyodide = await loadPyodideInstance();
-  let stdoutContent = "";
-  pyodide.setStdout({
-    write: (text) => {
-      stdoutContent += text;
-      return text.length;
+export function loadPyodideInstance() {
+  if (workerInitPromise) return workerInitPromise;
+
+  workerInitPromise = new Promise((resolve, reject) => {
+    try {
+      worker = createPythonWorker();
+      const id = nextMessageId++;
+      pendingPromises.set(id, { resolve, reject });
+      worker.postMessage({ type: 'init', id });
+    } catch (err) {
+      reject(err);
     }
   });
 
-  let error = null;
-  let success = false;
-  let resultRepr = "";
-
-  try {
-    await pyodide.loadPackagesFromImports(code);
-    const result = await pyodide.runPythonAsync(code);
-    success = true;
-    if (result !== undefined && result !== null) {
-      // If it is a PyProxy (e.g. DataFrame, Array), convert to string/JSON or representation
-      if (typeof result.toJs === 'function') {
-        try {
-          resultRepr = JSON.stringify(result.toJs(), null, 2);
-        } catch (e) {
-          resultRepr = String(result);
-        }
-      } else {
-        resultRepr = String(result);
-      }
-    }
-  } catch (err) {
-    error = err.message;
-    success = false;
-  }
-
-  return {
-    success,
-    stdout: stdoutContent,
-    error,
-    resultRepr
-  };
+  return workerInitPromise;
 }
 
+export async function runPythonCode(preludeCode, code, checks = []) {
+  await loadPyodideInstance();
+  return new Promise((resolve, reject) => {
+    const id = nextMessageId++;
+    pendingPromises.set(id, { resolve, reject });
+    worker.postMessage({
+      type: 'runPythonCode',
+      id,
+      preludeCode,
+      code,
+      checks
+    });
+  });
+}
+
+export async function runPythonCell(code) {
+  await loadPyodideInstance();
+  return new Promise((resolve, reject) => {
+    const id = nextMessageId++;
+    pendingPromises.set(id, { resolve, reject });
+    worker.postMessage({
+      type: 'runPythonCell',
+      id,
+      code
+    });
+  });
+}

@@ -58,6 +58,183 @@
   let selectedStatus = $state('all'); // 'all' | 'completed' | 'incomplete'
   let selectedTopic = $state('all');
 
+  // Tech Tree View States
+  let syllabusViewMode = $state('techtree'); // 'techtree' | 'grid'
+  let selectedTreeNode = $state('basics'); // 'basics' | 'data_analytics' | 'logic_oop' | 'advanced'
+
+  // Placement Quiz States & Questions
+  let showPlacementModal = $state(false);
+  let placementLang = $state('python');
+  let currentPlacementQIdx = $state(0);
+  let placementAnswers = $state([]);
+  let placementFinished = $state(false);
+  let placementPassed = $state(false);
+
+  const placementQuestions = {
+    python: [
+      {
+        question: "1. What is the output of the Python expression type(4.2)?",
+        options: ["<class 'int'>", "<class 'float'>", "<class 'str'>", "<class 'double'>"],
+        answer: 1,
+        explanation: "In Python, decimal numbers are represented as the float data type."
+      },
+      {
+        question: "2. What is the result of evaluating [1, 2] * 2 in Python?",
+        options: ["[1, 2, 1, 2]", "[2, 4]", "TypeError", "[[1, 2], [1, 2]]"],
+        answer: 0,
+        explanation: "Multiplying a list by an integer duplicates the items of the list in sequence."
+      },
+      {
+        question: "3. Which operator is used for integer floor division (discarding the remainder)?",
+        options: ["/", "%", "//", "div"],
+        answer: 2,
+        explanation: "The // operator performs floor division, rounding down to the nearest integer."
+      },
+      {
+        question: "4. How do you append a new element 'x' to the end of a list named 'lst'?",
+        options: ["lst.add('x')", "lst.push('x')", "lst.append('x')", "lst + 'x'"],
+        answer: 2,
+        explanation: "In Python lists, the append() method adds an item to the end of the list."
+      },
+      {
+        question: "5. Which keyword is used to define a custom function block in Python?",
+        options: ["function", "def", "func", "define"],
+        answer: 1,
+        explanation: "The def keyword begins a function definition block in Python."
+      }
+    ],
+    sql: [
+      {
+        question: "1. Which SQL keyword is used to select specific columns from a database table?",
+        options: ["GET", "SELECT", "RETRIEVE", "PROJECT"],
+        answer: 1,
+        explanation: "The SELECT statement specifies which columns to fetch from a database."
+      },
+      {
+        question: "2. Which SQL clause filters rows based on a specific logical condition?",
+        options: ["WHERE", "HAVING", "IF", "FILTER"],
+        answer: 0,
+        explanation: "The WHERE clause filters rows in SQL queries before any grouping occurs."
+      },
+      {
+        question: "3. How do you sort query results in SQL (by default in ascending order)?",
+        options: ["SORT BY", "ORDER BY", "GROUP BY", "ARRANGE"],
+        answer: 1,
+        explanation: "The ORDER BY statement sorts the query outputs based on one or more columns."
+      },
+      {
+        question: "4. Which JOIN type returns only the rows that match in both combined tables?",
+        options: ["LEFT JOIN", "FULL JOIN", "INNER JOIN", "CROSS JOIN"],
+        answer: 2,
+        explanation: "An INNER JOIN matches records present in both tables based on join predicates."
+      },
+      {
+        question: "5. Which aggregation function returns the total count of matching rows in a group?",
+        options: ["COUNT()", "SUM()", "TOTAL()", "ROWS()"],
+        answer: 0,
+        explanation: "COUNT() computes the number of rows matching the query filters."
+      }
+    ]
+  };
+
+  function submitPlacementAnswer(optIdx) {
+    placementAnswers = [...placementAnswers, optIdx];
+    if (currentPlacementQIdx < 4) {
+      currentPlacementQIdx++;
+    } else {
+      let correctCount = 0;
+      const questionsList = placementQuestions[placementLang];
+      placementAnswers.forEach((ans, idx) => {
+        if (ans === questionsList[idx].answer) correctCount++;
+      });
+
+      placementPassed = correctCount >= 4;
+      placementFinished = true;
+
+      if (placementPassed) {
+        localStorage.setItem('dojo_placement_taken', 'true');
+        const pyBasicsIds = ["ch01-hello-world-01", "ch01-arithmetic-02", "ch01-division-03", "ch01-leap-year-04", "ch01-runner-up-05"];
+        const sqlBasicsIds = ["sql-basic-select", "sql-where-basics", "sql-logical-operators", "sql-casing-formatter", "sql-sorting-order", "sql-limit-records"];
+        const targetIds = placementLang === 'python' ? pyBasicsIds : sqlBasicsIds;
+
+        completedChallenges.update(list => {
+          return Array.from(new Set([...list, ...targetIds]));
+        });
+
+        xp.update(val => val + 150);
+        updateSignature();
+      }
+    }
+  }
+
+  let filteredTreeTasks = $derived.by(() => {
+    const list = currentLang === 'python' ? pythonExercises : sqlExercises;
+    return list.filter(task => {
+      const ch = Number(task.chapter);
+      if (currentLang === 'python') {
+        if (selectedTreeNode === 'basics') return ch <= 5;
+        if (selectedTreeNode === 'data_analytics') return ch >= 6 && ch <= 10;
+        if (selectedTreeNode === 'logic_oop') return ch >= 11 && ch <= 12;
+        if (selectedTreeNode === 'advanced') return ch >= 13;
+      } else {
+        if (selectedTreeNode === 'basics') return ch <= 6;
+        if (selectedTreeNode === 'data_analytics') return ch >= 7 && ch <= 12;
+        if (selectedTreeNode === 'logic_oop') return ch >= 13 && ch <= 14;
+        if (selectedTreeNode === 'advanced') return ch >= 15;
+      }
+      return false;
+    });
+  });
+
+  let nodeCompletionStats = $derived.by(() => {
+    const pyList = pythonExercises;
+    const sqlList = sqlExercises;
+    const list = currentLang === 'python' ? pyList : sqlList;
+
+    const getStats = (nodeKey) => {
+      const nodeTasks = list.filter(task => {
+        const ch = Number(task.chapter);
+        if (currentLang === 'python') {
+          if (nodeKey === 'basics') return ch <= 5;
+          if (nodeKey === 'data_analytics') return ch >= 6 && ch <= 10;
+          if (nodeKey === 'logic_oop') return ch >= 11 && ch <= 12;
+          if (nodeKey === 'advanced') return ch >= 13;
+        } else {
+          if (nodeKey === 'basics') return ch <= 6;
+          if (nodeKey === 'data_analytics') return ch >= 7 && ch <= 12;
+          if (nodeKey === 'logic_oop') return ch >= 13 && ch <= 14;
+          if (nodeKey === 'advanced') return ch >= 15;
+        }
+        return false;
+      });
+      if (nodeTasks.length === 0) return { completed: 0, total: 0, pct: 0 };
+      const completedCount = nodeTasks.filter(t => completedList.includes(t.id)).length;
+      return {
+        completed: completedCount,
+        total: nodeTasks.length,
+        pct: Math.round((completedCount / nodeTasks.length) * 100)
+      };
+    };
+
+    const basics = getStats('basics');
+    const data_analytics = getStats('data_analytics');
+    const logic_oop = getStats('logic_oop');
+    const advanced = getStats('advanced');
+
+    // Unlocked states (Basics acts as checkpoint)
+    const basicsUnlocked = true;
+    const data_analyticsUnlocked = basics.pct >= 30; // Unlocks at 30% completion of basics
+    const logic_oopUnlocked = basics.pct >= 30;
+    const advancedUnlocked = data_analytics.pct >= 30 && logic_oop.pct >= 30;
+
+    return {
+      basics: { ...basics, unlocked: basicsUnlocked },
+      data_analytics: { ...data_analytics, unlocked: data_analyticsUnlocked },
+      logic_oop: { ...logic_oop, unlocked: logic_oopUnlocked },
+      advanced: { ...advanced, unlocked: advancedUnlocked }
+    };
+  });
+
   // Daily quest goal progress (Item 122)
   let dailyXpEarned = $state(0);
   const dailyXpGoal = 50;
@@ -1294,6 +1471,18 @@
 
   <!-- Chapters list -->
   <div class="dojo-chapters-list">
+    {#if currentXp === 0 && !localStorage.getItem('dojo_placement_taken')}
+      <div class="placement-quiz-banner">
+        <div class="banner-text">
+          <h3 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 800; color: var(--color-primary);">🎓 Fast-Track Your Syllabus!</h3>
+          <p style="margin: 0; font-size: 11px; color: var(--color-muted);">Take a quick 5-question diagnostic quiz to skip the Basics node and unlock intermediate/advanced specializations immediately.</p>
+        </div>
+        <button class="take-placement-btn" onclick={() => { showPlacementModal = true; currentPlacementQIdx = 0; placementAnswers = []; placementFinished = false; placementLang = currentLang; }}>
+          Take Diagnostic Quiz
+        </button>
+      </div>
+    {/if}
+
     <div class="dojo-syllabus-header">
       <div class="section-title">
         <BookOpen size={18} class="sec-icon" />
@@ -1362,9 +1551,270 @@
       </div>
     {/if}
 
-    {#if currentLang === 'python'}
-      <!-- Python Chapters list -->
-      <div class="chapters-grid">
+    <div class="syllabus-header-row">
+      <h2 class="section-title-sub" style="margin: 0; font-size: 18px; font-weight: 800; font-family: var(--font-display); color: var(--color-ink);">Dojo Path Tech Tree</h2>
+      <div class="syllabus-view-toggle">
+        <button 
+          class="toggle-btn" 
+          class:active={syllabusViewMode === 'techtree'} 
+          onclick={() => syllabusViewMode = 'techtree'}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><path d="M12 22a7 7 0 0 0 5-1.91M17 21A7 7 0 0 0 17 3M17 21h-5M12 2a7 7 0 0 0-5 1.91M7 3a7 7 0 0 0 0 18M7 3h5M12 2v20M2 12h20"/></svg>
+          Interactive Skill Map
+        </button>
+        <button 
+          class="toggle-btn" 
+          class:active={syllabusViewMode === 'grid'} 
+          onclick={() => syllabusViewMode = 'grid'}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          Syllabus List
+        </button>
+      </div>
+    </div>
+
+    {#if syllabusViewMode === 'techtree'}
+      <!-- We render the interactive Tech Tree component -->
+      <div class="techtree-container">
+        <div class="techtree-canvas-panel">
+          <svg class="techtree-svg" viewBox="0 0 800 520">
+            <defs>
+              <filter id="glow-green" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+              <filter id="glow-blue" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+              <filter id="glow-pink" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+              <filter id="glow-yellow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+              
+              <linearGradient id="grad-basics" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#10b981" />
+                <stop offset="100%" stop-color="#059669" />
+              </linearGradient>
+              <linearGradient id="grad-analytics" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#3b82f6" />
+                <stop offset="100%" stop-color="#2563eb" />
+              </linearGradient>
+              <linearGradient id="grad-logic" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#d946ef" />
+                <stop offset="100%" stop-color="#c084fc" />
+              </linearGradient>
+              <linearGradient id="grad-advanced" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#eab308" />
+                <stop offset="100%" stop-color="#ca8a04" />
+              </linearGradient>
+            </defs>
+
+            <!-- Connecting Paths -->
+            <path 
+              d="M 400 80 Q 200 80 200 240" 
+              fill="none" 
+              stroke={nodeCompletionStats.data_analytics.unlocked ? "var(--color-primary)" : "#1e293b"} 
+              stroke-width="5" 
+              style={nodeCompletionStats.data_analytics.unlocked ? "filter: url(#glow-green); stroke: #10b981;" : ""}
+            />
+            <path 
+              d="M 400 80 Q 600 80 600 240" 
+              fill="none" 
+              stroke={nodeCompletionStats.logic_oop.unlocked ? "#d946ef" : "#1e293b"} 
+              stroke-width="5" 
+              style={nodeCompletionStats.logic_oop.unlocked ? "filter: url(#glow-pink);" : ""}
+            />
+            <path 
+              d="M 200 280 Q 200 440 400 440" 
+              fill="none" 
+              stroke={nodeCompletionStats.advanced.unlocked ? "#eab308" : "#1e293b"} 
+              stroke-width="5" 
+              style={nodeCompletionStats.advanced.unlocked ? "filter: url(#glow-yellow);" : ""}
+            />
+            <path 
+              d="M 600 280 Q 600 440 400 440" 
+              fill="none" 
+              stroke={nodeCompletionStats.advanced.unlocked ? "#eab308" : "#1e293b"} 
+              stroke-width="5" 
+              style={nodeCompletionStats.advanced.unlocked ? "filter: url(#glow-yellow);" : ""}
+            />
+
+            <!-- Node 1: Basics -->
+            <g 
+              class="tree-node-group" 
+              class:selected={selectedTreeNode === 'basics'}
+              onclick={() => selectedTreeNode = 'basics'}
+            >
+              <circle 
+                cx="400" 
+                cy="80" 
+                r="42" 
+                fill="url(#grad-basics)" 
+                stroke={selectedTreeNode === 'basics' ? "#fff" : "rgba(255, 255, 255, 0.15)"} 
+                stroke-width="3"
+                style="filter: url(#glow-green);"
+              />
+              <text x="400" y="84" text-anchor="middle" fill="#fff" font-weight="800" font-size="10" font-family="var(--font-display)">BASICS</text>
+              <text x="400" y="142" text-anchor="middle" fill="var(--color-ink)" font-size="11" font-weight="700">
+                Foundations ({nodeCompletionStats.basics.pct}%)
+              </text>
+            </g>
+
+            <!-- Node 2: Data Analytics -->
+            <g 
+              class="tree-node-group" 
+              class:locked={!nodeCompletionStats.data_analytics.unlocked}
+              class:selected={selectedTreeNode === 'data_analytics'}
+              onclick={() => { if (nodeCompletionStats.data_analytics.unlocked) selectedTreeNode = 'data_analytics'; }}
+            >
+              <circle 
+                cx="200" 
+                cy="260" 
+                r="42" 
+                fill={nodeCompletionStats.data_analytics.unlocked ? "url(#grad-analytics)" : "#161622"} 
+                stroke={selectedTreeNode === 'data_analytics' ? "#fff" : "rgba(255, 255, 255, 0.15)"} 
+                stroke-width="3"
+                style={nodeCompletionStats.data_analytics.unlocked ? "filter: url(#glow-blue);" : ""}
+              />
+              {#if !nodeCompletionStats.data_analytics.unlocked}
+                <text x="200" y="265" text-anchor="middle" fill="#64748b" font-weight="900" font-size="15">🔒</text>
+              {:else}
+                <text x="200" y="264" text-anchor="middle" fill="#fff" font-weight="800" font-size="10" font-family="var(--font-display)">DATA</text>
+              {/if}
+              <text x="200" y="322" text-anchor="middle" fill="var(--color-ink)" font-size="11" font-weight="700">
+                Analytics ({nodeCompletionStats.data_analytics.pct}%)
+              </text>
+            </g>
+
+            <!-- Node 3: Software Logic & OOP -->
+            <g 
+              class="tree-node-group" 
+              class:locked={!nodeCompletionStats.logic_oop.unlocked}
+              class:selected={selectedTreeNode === 'logic_oop'}
+              onclick={() => { if (nodeCompletionStats.logic_oop.unlocked) selectedTreeNode = 'logic_oop'; }}
+            >
+              <circle 
+                cx="600" 
+                cy="260" 
+                r="42" 
+                fill={nodeCompletionStats.logic_oop.unlocked ? "url(#grad-logic)" : "#161622"} 
+                stroke={selectedTreeNode === 'logic_oop' ? "#fff" : "rgba(255, 255, 255, 0.15)"} 
+                stroke-width="3"
+                style={nodeCompletionStats.logic_oop.unlocked ? "filter: url(#glow-pink);" : ""}
+              />
+              {#if !nodeCompletionStats.logic_oop.unlocked}
+                <text x="600" y="265" text-anchor="middle" fill="#64748b" font-weight="900" font-size="15">🔒</text>
+              {:else}
+                <text x="600" y="264" text-anchor="middle" fill="#fff" font-weight="800" font-size="10" font-family="var(--font-display)">LOGIC</text>
+              {/if}
+              <text x="600" y="322" text-anchor="middle" fill="var(--color-ink)" font-size="11" font-weight="700">
+                Logic & OOP ({nodeCompletionStats.logic_oop.pct}%)
+              </text>
+            </g>
+
+            <!-- Node 4: Advanced -->
+            <g 
+              class="tree-node-group" 
+              class:locked={!nodeCompletionStats.advanced.unlocked}
+              class:selected={selectedTreeNode === 'advanced'}
+              onclick={() => { if (nodeCompletionStats.advanced.unlocked) selectedTreeNode = 'advanced'; }}
+            >
+              <circle 
+                cx="400" 
+                cy="440" 
+                r="42" 
+                fill={nodeCompletionStats.advanced.unlocked ? "url(#grad-advanced)" : "#161622"} 
+                stroke={selectedTreeNode === 'advanced' ? "#fff" : "rgba(255, 255, 255, 0.15)"} 
+                stroke-width="3"
+                style={nodeCompletionStats.advanced.unlocked ? "filter: url(#glow-yellow);" : ""}
+              />
+              {#if !nodeCompletionStats.advanced.unlocked}
+                <text x="400" y="445" text-anchor="middle" fill="#64748b" font-weight="900" font-size="15">🔒</text>
+              {:else}
+                <text x="400" y="444" text-anchor="middle" fill="#fff" font-weight="800" font-size="9" font-family="var(--font-display)">ADVANCED</text>
+              {/if}
+              <text x="400" y="502" text-anchor="middle" fill="var(--color-ink)" font-size="11" font-weight="700">
+                Advanced ({nodeCompletionStats.advanced.pct}%)
+              </text>
+            </g>
+          </svg>
+        </div>
+
+        <div class="techtree-exercises-panel">
+          <div class="panel-header-box">
+            <h3 class="panel-node-title">
+              {#if selectedTreeNode === 'basics'}
+                📚 Dojo Foundations
+              {:else if selectedTreeNode === 'data_analytics'}
+                ⚡ Data Analytics Specialization
+              {:else if selectedTreeNode === 'logic_oop'}
+                🛠️ Software Logic & OOP
+              {:else}
+                🏆 Advanced Dojo Capstones
+              {/if}
+            </h3>
+            <p class="panel-node-desc">
+              {#if selectedTreeNode === 'basics'}
+                Learn basic variables, arithmetic calculations, data structures, and conditional comparisons.
+              {:else if selectedTreeNode === 'data_analytics'}
+                Perform advanced filters, aggregation sums, matrix arithmetic (NumPy), and DataFrame slices (Pandas).
+              {:else if selectedTreeNode === 'logic_oop'}
+                Structure cleaner solutions using functions, classes, and regular expression models.
+              {:else}
+                Solve complex statistical algorithms (Scikit-Learn models, clustering) and advanced window operations.
+              {/if}
+            </p>
+          </div>
+
+          <div class="task-rows">
+            {#each filteredTreeTasks as task}
+              <div class="task-row" class:completed={completedList.includes(task.id)}>
+                <div class="task-meta">
+                  {#if completedList.includes(task.id)}
+                    <CheckCircle size={16} class="status-comp" />
+                  {:else}
+                    <Circle size={16} class="status-empty" />
+                  {/if}
+                  <div class="task-info">
+                    <span class="task-title">
+                      {task.title}
+                      {#if task.isCustom}
+                        <span class="custom-badge" title="Forged challenge">Custom</span>
+                      {/if}
+                    </span>
+                    <span class="task-topic">{task.topic}</span>
+                  </div>
+                </div>
+                <div class="task-actions">
+                  <button 
+                    class="star-toggle-btn" 
+                    class:starred={starredList.includes(task.id)}
+                    onclick={() => toggleStar(task.id)}
+                    title="Bookmark exercise"
+                  >
+                    <Star size={13} fill={starredList.includes(task.id) ? "currentColor" : "none"} />
+                  </button>
+                  <span class="diff-tag {task.difficulty}">{task.difficulty}</span>
+                  <button class="play-btn" onclick={() => startChallenge(task.id, currentLang)}>
+                    <Play size={12} fill="currentColor" />
+                    <span>Train</span>
+                  </button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </div>
+    {:else}
+      <!-- Original Syllabus Lists -->
+      {#if currentLang === 'python'}
+        <!-- Python Chapters list -->
+        <div class="chapters-grid">
         {#each Object.keys(pythonChapters) as chNum}
           <div class="chapter-block">
             <h3 class="chapter-title">
@@ -1462,8 +1912,52 @@
           </div>
         {/each}
       </div>
+      {/if}
     {/if}
   </div>
+
+  <!-- Diagnostic Placement Quiz Modal -->
+  {#if showPlacementModal}
+    <div class="placement-modal-overlay">
+      <div class="placement-modal-card">
+        <button class="modal-close-btn" onclick={() => showPlacementModal = false}>×</button>
+        
+        {#if !placementFinished}
+          <div class="quiz-progress-text">Question {currentPlacementQIdx + 1} of 5</div>
+          <div class="quiz-progress-bar">
+            <div class="quiz-progress-fill" style="width: {(currentPlacementQIdx + 1) * 20}%"></div>
+          </div>
+          
+          <h3 class="placement-question-title">
+            {placementQuestions[placementLang][currentPlacementQIdx].question}
+          </h3>
+          
+          <div class="placement-options-list">
+            {#each placementQuestions[placementLang][currentPlacementQIdx].options as opt, idx}
+              <button class="placement-option-btn" onclick={() => submitPlacementAnswer(idx)}>
+                {opt}
+              </button>
+            {/each}
+          </div>
+        {:else}
+          <div class="quiz-result-box" class:passed={placementPassed}>
+            {#if placementPassed}
+              <span class="result-emoji">🎉</span>
+              <h3 class="result-title">Congratulations! You Passed!</h3>
+              <p class="result-desc">You answered the diagnostic questions correctly. The Basics track has been marked complete and we've awarded you 150 XP! You've unlocked intermediate paths.</p>
+            {:else}
+              <span class="result-emoji">💪</span>
+              <h3 class="result-title">Nice Try!</h3>
+              <p class="result-desc">You didn't pass the placement quiz, but that's what this Dojo is for! Let's start learning the Basics foundations from the tech tree.</p>
+            {/if}
+            <button class="placement-finish-btn" onclick={() => { showPlacementModal = false; localStorage.setItem('dojo_placement_taken', 'true'); }}>
+              Enter Dojo
+            </button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -3145,5 +3639,318 @@
 
   .query-results-table tr:last-child td {
     border-bottom: none;
+  }
+
+  /* Interactive Tech Tree Layout styling */
+  .syllabus-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--color-hairline);
+    padding-bottom: 12px;
+  }
+  
+  .syllabus-view-toggle {
+    display: flex;
+    background: #09090c;
+    border: 1px solid var(--color-hairline);
+    padding: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .syllabus-view-toggle .toggle-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-muted);
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: bold;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s;
+  }
+
+  .syllabus-view-toggle .toggle-btn.active {
+    background: var(--color-tab-inactive);
+    color: var(--color-primary);
+    box-shadow: 0 0 8px var(--color-accent-glow);
+  }
+
+  .techtree-container {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 32px;
+    background: #0d0d11;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    margin-bottom: 32px;
+  }
+
+  .techtree-canvas-panel {
+    background: #050508;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .techtree-svg {
+    width: 100%;
+    height: auto;
+    max-height: 480px;
+  }
+
+  .tree-node-group {
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+
+  .tree-node-group:hover {
+    transform: scale(1.05);
+  }
+
+  .tree-node-group.locked {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  
+  .tree-node-group.locked:hover {
+    transform: none;
+  }
+
+  .tree-node-group.selected circle {
+    stroke-dasharray: 4;
+    animation: rotate-stroke 12s linear infinite;
+  }
+
+  @keyframes rotate-stroke {
+    100% { stroke-dashoffset: 24; }
+  }
+
+  .techtree-exercises-panel {
+    display: flex;
+    flex-direction: column;
+    height: 480px;
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+
+  .panel-header-box {
+    border-bottom: 1px solid var(--color-hairline);
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+  }
+
+  .panel-node-title {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 800;
+    font-family: var(--font-display);
+    color: var(--color-ink);
+  }
+
+  .panel-node-desc {
+    margin: 0;
+    font-size: 11px;
+    color: var(--color-muted);
+    line-height: 1.4;
+  }
+
+  @media (max-width: 900px) {
+    .techtree-container {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+    .techtree-exercises-panel {
+      height: auto;
+      max-height: 400px;
+    }
+  }
+
+  /* Diagnostic Quiz Banner */
+  .placement-quiz-banner {
+    background: rgba(16, 185, 129, 0.05);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+  
+  .take-placement-btn {
+    background: var(--color-primary);
+    color: #000;
+    border: none;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .take-placement-btn:hover {
+    box-shadow: 0 0 12px var(--color-accent-glow);
+    transform: translateY(-1px);
+  }
+
+  /* Diagnostic Quiz Modal */
+  .placement-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(9, 9, 12, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .placement-modal-card {
+    background: #0d0d11;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-lg);
+    width: 100%;
+    max-width: 520px;
+    padding: 32px;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .modal-close-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    color: var(--color-muted);
+    font-size: 24px;
+    cursor: pointer;
+  }
+
+  .quiz-progress-text {
+    font-size: 11px;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+
+  .quiz-progress-bar {
+    height: 4px;
+    background: #1a1a24;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  .quiz-progress-fill {
+    height: 100%;
+    background: var(--color-primary);
+    transition: width 0.2s;
+  }
+
+  .placement-question-title {
+    margin: 0 0 24px 0;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.4;
+    color: var(--color-ink);
+  }
+
+  .placement-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .placement-option-btn {
+    background: #09090c;
+    border: 1px solid var(--color-hairline);
+    color: var(--color-ink);
+    padding: 14px 20px;
+    border-radius: var(--radius-md);
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .placement-option-btn:hover {
+    border-color: var(--color-primary);
+    background: rgba(16, 185, 129, 0.04);
+  }
+
+  .quiz-result-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .result-emoji {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .result-title {
+    margin: 0 0 12px 0;
+    font-size: 18px;
+    font-weight: 800;
+  }
+
+  .result-desc {
+    font-size: 12px;
+    color: var(--color-muted);
+    line-height: 1.5;
+    margin: 0 0 24px 0;
+  }
+
+  .placement-finish-btn {
+    background: var(--color-primary);
+    color: #000;
+    border: none;
+    padding: 10px 24px;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+
+  .placement-finish-btn:hover {
+    box-shadow: 0 0 16px var(--color-accent-glow);
+  }
+
+  @media (max-width: 600px) {
+    .placement-quiz-banner {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .take-placement-btn {
+      width: 100%;
+      text-align: center;
+    }
   }
 </style>

@@ -3,7 +3,8 @@
   import { Play, PlusCircle, Trash2, ArrowUp, ArrowDown, FileCode, FileText, Download, Upload, CheckCircle2, AlertCircle } from 'lucide-svelte';
   import Editor from './Editor.svelte';
   import { runPythonCell } from '../runners/python-runner.js';
-  import { runSqlQuery } from '../runners/sql-runner.js';
+  import { runSqlQuery, runNotebookSqlQuery, resetNotebookDatabase } from '../runners/sql-runner.js';
+  import { sqlDbSeed } from '../data/sql-exercises.js';
   import { parseMarkdown } from '../utils/markdown.js';
 
   let { 
@@ -24,6 +25,9 @@
 
   // Load cells reactively when challengeId or language changes
   $effect(() => {
+    if (language === 'sql') {
+      resetNotebookDatabase();
+    }
     const key = `dojo_notebook_${challengeId}_${language}`;
     const saved = localStorage.getItem(key);
     let parsed = null;
@@ -168,7 +172,7 @@
     } else {
       // SQL mode
       try {
-        const outcome = await runSqlQuery(null, cell.content);
+        const outcome = await runNotebookSqlQuery(sqlDbSeed, cell.content);
         if (outcome.success) {
           if (outcome.result && outcome.result.length > 0) {
             cell.resultRepr = JSON.stringify({
