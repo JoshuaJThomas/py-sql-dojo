@@ -90,6 +90,7 @@ for c in __checks_list__:
     if "==" in test_str:
         try:
             lhs, rhs = test_str.split("==", 1)
+            compile(lhs.strip(), '<string>', 'eval')
             e_val = eval(rhs.strip(), globals())
             expected_val = repr(e_val)
             has_expected = True
@@ -115,15 +116,15 @@ for c in __checks_list__:
         if "==" in test_str:
             try:
                 lhs, rhs = test_str.split("==", 1)
+                compile(lhs.strip(), '<string>', 'eval')
                 a_val = eval(lhs.strip(), globals())
                 if callable(a_val):
                     actual_val = f"<function {a_val.__name__}>"
                 else:
                     actual_val = repr(a_val)
                 has_actual = True
-            except Exception as eval_err:
-                actual_val = f"<Error evaluating output: {type(eval_err).__name__}>"
-                has_actual = True
+            except:
+                pass
         
         if not has_actual:
             try:
