@@ -207,9 +207,12 @@
 </script>
 
 <div class="explain-visualizer-container">
-  <div class="explain-header-row">
-    <Cpu size={16} class="header-icon" />
-    <span>SQLite Query Plan Analyzer</span>
+  <div class="explain-header-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <Cpu size={16} class="header-icon" />
+      <span>SQLite Query Plan Analyzer</span>
+    </div>
+    <span style="font-size: 9px; font-weight: 800; background: var(--color-tab-inactive); border: 1px solid var(--color-hairline); padding: 2px 6px; border-radius: 4px; color: var(--color-muted);" title="Execution weights are heuristically estimated based on plan complexity (e.g. O(N) Table Scan vs O(log N) Index Search).">HEURISTIC COST PROFILE</span>
   </div>
 
   {#if explainRows.length === 0}
@@ -230,11 +233,11 @@
           </div>
           <div class="node-details" style="flex: 1; width: 100%;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
-              <span class="node-id font-mono">Stage ID: {node.id}</span>
-              <span class="node-cost-badge font-mono" style="color: {getCostColor(node.detail)}; font-weight: 700; font-size: 10px;">
-                CPU: {Math.round((estimateStageCost(node.detail) / totalCostScore) * 100)}%
-              </span>
-            </div>
+                <span class="node-id font-mono">Stage ID: {node.id}</span>
+                <span class="node-cost-badge font-mono" style="color: {getCostColor(node.detail)}; font-weight: 700; font-size: 10px;" title="Estimated complexity weight (SCAN = high cost, INDEX = low cost)">
+                  Est. Weight: {Math.round((estimateStageCost(node.detail) / totalCostScore) * 100)}%
+                </span>
+              </div>
             <span class="node-desc">{node.detail}</span>
             
             <!-- CPU Cost Bar -->
