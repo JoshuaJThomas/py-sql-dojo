@@ -979,5 +979,95 @@ export const pythonExercises = [
     hint: "Use CountVectorizer(stop_words='english'). Fit-transform and call .shape.",
     solution: "vec = CountVectorizer(stop_words='english')\nmat = vec.fit_transform(corpus)\nresult = mat.shape",
     difficulty: "medium"
+  },
+  {
+    id: "ch18-tfidf-vectorizer-03",
+    chapter: 18,
+    topic: "natural language processing",
+    title: "TF-IDF Text Vectorization",
+    prompt: "Given a list of documents `corpus`, convert it into a TF-IDF matrix using `TfidfVectorizer` with English stop words. Fit the vectorizer on the corpus, and get the shape of the resulting transform matrix. Assign the shape tuple to `result`.",
+    starterCode: "from sklearn.feature_extraction.text import TfidfVectorizer\n# corpus is pre-defined\nresult = ...",
+    prelude: "corpus = ['Intro to NLP and NLP tools.', 'NLP tools are useful.']",
+    checks: [
+      { test: "isinstance(result, tuple) and len(result) == 2", msg: "result must be a shape tuple" },
+      { test: "result == (2, 4)", msg: "Result shape must be (2, 4) after TF-IDF vectorization and stop-word filtering" }
+    ],
+    hint: "Use TfidfVectorizer(stop_words='english'). Fit-transform and call .shape.",
+    solution: "from sklearn.feature_extraction.text import TfidfVectorizer\nvec = TfidfVectorizer(stop_words='english')\nmat = vec.fit_transform(corpus)\nresult = mat.shape",
+    difficulty: "medium"
+  },
+  {
+    id: "ch18-text-stemming-04",
+    chapter: 18,
+    topic: "natural language processing",
+    title: "Simple Text Stemming",
+    prompt: "Write a function `simple_stemmer(word)` that stems a word by applying the following ordered rules:\n1. If the word ends with 'ingly', remove 'ingly'.\n2. Otherwise, if it ends with 'ing' or 'ly', remove the suffix.\n3. Otherwise, if it ends with 'ed', remove 'ed'.\nReturn the stemmed word in lowercase. Assign the function to `result`.",
+    starterCode: "def simple_stemmer(word):\n    # Write stemming rules here\n    pass\n\nresult = simple_stemmer",
+    prelude: "",
+    checks: [
+      { test: "result('running') == 'runn'", msg: "Should stem 'running' to 'runn'" },
+      { test: "result('quickly') == 'quick'", msg: "Should stem 'quickly' to 'quick'" },
+      { test: "result('amazingly') == 'amaz'", msg: "Should stem 'amazingly' to 'amaz'" },
+      { test: "result('Played') == 'play'", msg: "Should stem 'Played' to 'play' and convert to lowercase" },
+      { test: "result('test') == 'test'", msg: "Should return the word itself if no rules match" }
+    ],
+    hint: "Implement a series of if-elif statements checking word.lower().endswith() and return the sliced string.",
+    solution: "def simple_stemmer(word):\n    w = word.lower()\n    if w.endswith('ingly'):\n        return w[:-5]\n    elif w.endswith('ing'):\n        return w[:-3]\n    elif w.endswith('ly'):\n        return w[:-2]\n    elif w.endswith('ed'):\n        return w[:-2]\n    return w\nresult = simple_stemmer",
+    difficulty: "medium"
+  },
+  {
+    id: "ch10-decision-tree-regression-04",
+    chapter: 10,
+    topic: "regression models",
+    title: "Decision Tree Regression",
+    prompt: "Train a `DecisionTreeRegressor` with `max_depth=3` and `random_state=42` on features `X` and targets `y`. Assign the fitted model to `result`.",
+    starterCode: "from sklearn.tree import DecisionTreeRegressor\n# X and y are pre-defined\nresult = ...",
+    prelude: "from sklearn.datasets import make_regression\nX, y = make_regression(n_samples=40, n_features=2, random_state=42)",
+    checks: [
+      { test: "from sklearn.tree import DecisionTreeRegressor; isinstance(result, DecisionTreeRegressor)", msg: "result must be a DecisionTreeRegressor instance" },
+      { test: "result.max_depth == 3", msg: "max_depth parameter must be 3" },
+      { test: "result.random_state == 42", msg: "random_state parameter must be 42" },
+      { test: "hasattr(result, 'tree_')", msg: "Model must be fitted on training data X and y" }
+    ],
+    hint: "Instantiate DecisionTreeRegressor(max_depth=3, random_state=42) and fit it on X and y.",
+    solution: "from sklearn.tree import DecisionTreeRegressor\nmodel = DecisionTreeRegressor(max_depth=3, random_state=42)\nmodel.fit(X, y)\nresult = model",
+    difficulty: "easy"
+  },
+  {
+    id: "ch05-pandas-merge-04",
+    chapter: 5,
+    topic: "pandas basics",
+    title: "Pandas DataFrame Merge",
+    prompt: "Merge two Pandas DataFrames `df_left` and `df_right` using an inner join on the common key column `'id'`. Assign the resulting merged DataFrame to `result`.",
+    starterCode: "# df_left and df_right are pre-defined\nresult = ...",
+    prelude: "import pandas as pd\ndf_left = pd.DataFrame({'id': [1, 2, 3], 'name': ['Alice', 'Bob', 'Charlie']})\ndf_right = pd.DataFrame({'id': [2, 3, 4], 'score': [85, 90, 95]})",
+    checks: [
+      { test: "isinstance(result, pd.DataFrame)", msg: "result must be a Pandas DataFrame" },
+      { test: "list(result['id']) == [2, 3]", msg: "Merged rows must contain ids [2, 3]" },
+      { test: "list(result['name']) == ['Bob', 'Charlie']", msg: "Merged columns must contain names ['Bob', 'Charlie']" },
+      { test: "list(result['score']) == [85, 90]", msg: "Merged columns must contain scores [85, 90]" },
+      { test: "result.shape == (2, 3)", msg: "DataFrame dimensions must be (2, 3)" }
+    ],
+    hint: "Use pd.merge(df_left, df_right, on='id', how='inner') or df_left.merge(df_right, on='id').",
+    solution: "import pandas as pd\nresult = pd.merge(df_left, df_right, on='id', how='inner')",
+    difficulty: "easy"
+  },
+  {
+    id: "ch05-pandas-groupby-agg-05",
+    chapter: 5,
+    topic: "pandas basics",
+    title: "Groupby and Multi-Aggregation",
+    prompt: "Given a Pandas DataFrame `df`, group the employees by `'Department'` and compute both the mean and max of `'Salary'` for each group using `.agg()`. Assign the resulting DataFrame to `result`.",
+    starterCode: "# df is pre-defined\nresult = ...",
+    prelude: "import pandas as pd\ndf = pd.DataFrame({'Department': ['HR', 'Eng', 'HR', 'Eng'], 'Salary': [50000, 80000, 60000, 90000]})",
+    checks: [
+      { test: "isinstance(result, pd.DataFrame)", msg: "result must be a Pandas DataFrame" },
+      { test: "list(result.index) == ['Eng', 'HR']", msg: "Index must be grouped by Department sorted alphabetically" },
+      { test: "list(result['mean']) == [85000.0, 55000.0]", msg: "Mean salary is incorrect" },
+      { test: "list(result['max']) == [90000, 60000]", msg: "Max salary is incorrect" }
+    ],
+    hint: "Use df.groupby('Department')['Salary'].agg(['mean', 'max']).",
+    solution: "result = df.groupby('Department')['Salary'].agg(['mean', 'max'])",
+    difficulty: "medium"
   }
 ];
