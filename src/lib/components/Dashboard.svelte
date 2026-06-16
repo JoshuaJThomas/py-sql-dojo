@@ -38,7 +38,7 @@
     Lock, Unlock, Trash2, Search, X, Code, Database
   } from 'lucide-svelte';
 
-  let { onOpenSandbox } = $props();
+  let { onOpenSandbox, onTrainChallenge = null } = $props();
 
   let currentLang = $derived($language);
   let completedList = $derived($completedChallenges);
@@ -468,6 +468,9 @@
       if (idx !== -1) {
         sqlChallengeIndex.set(idx);
       }
+    }
+    if (onTrainChallenge) {
+      onTrainChallenge(id, lang);
     }
   }
 
