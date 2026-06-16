@@ -907,6 +907,91 @@ export const sqlExercises = [
     hint: "Use ROUND(AVG(salary)) AS rounded_avg_salary, MAX(salary) AS max_salary.",
     solution: "SELECT ROUND(AVG(salary)) AS rounded_avg_salary, MAX(salary) AS max_salary FROM employees;",
     difficulty: "medium"
+  },
+  {
+    id: "sql-window-lead-lag-51",
+    chapter: 18,
+    topic: "Window Functions",
+    title: "Order Amount Lead and Difference",
+    prompt: "For each order in the `orders` table, retrieve the `order_id`, the current `total_amount`, the next order's total amount as `next_order_amount` (using the `LEAD` window function ordered by `order_id`), and the difference between them as `amount_difference` (`next_order_amount` minus `total_amount`). Sort by `order_id` ascending.",
+    starterCode: "-- Calculate next order amount and the difference\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].columns.includes('next_order_amount') && result[0].columns.includes('amount_difference'), msg: "Output columns must include next_order_amount and amount_difference" },
+      { rule: (result) => result && result[0].values.length === 7, msg: "Must return all 7 orders" },
+      { rule: (result) => result && Math.abs(result[0].values[0][3] - (-6600.50)) < 0.01, msg: "Order 9001 must show the correct amount difference of -6600.50" }
+    ],
+    hint: "Use LEAD(total_amount) OVER (ORDER BY order_id) AS next_order_amount, and subtract total_amount from that expression for amount_difference.",
+    solution: "SELECT order_id, total_amount, LEAD(total_amount) OVER (ORDER BY order_id) AS next_order_amount, (LEAD(total_amount) OVER (ORDER BY order_id) - total_amount) AS amount_difference FROM orders;",
+    difficulty: "hard"
+  },
+  {
+    id: "sql-window-dense-rank-52",
+    chapter: 18,
+    topic: "Window Functions",
+    title: "Rank Salaries Within Departments",
+    prompt: "Retrieve the `dept_id`, employee `name`, `salary`, and their rank within their department as `dept_salary_rank` using `DENSE_RANK()`. Employees with higher salaries in each department should be ranked first (rank 1). Order the output by `dept_id` ascending and `salary` descending.",
+    starterCode: "-- Rank employees by salary within their department\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 8, msg: "Must return all 8 employees" },
+      { rule: (result) => result && result[0].values[0][0] === 1 && result[0].values[0][1] === 'Alice Smith' && result[0].values[0][3] === 1, msg: "Alice Smith in Dept 1 must have rank 1" },
+      { rule: (result) => result && result[0].values[2][0] === 1 && result[0].values[2][1] === 'Grace Kelly' && result[0].values[2][3] === 3, msg: "Grace Kelly in Dept 1 must have rank 3" }
+    ],
+    hint: "Use DENSE_RANK() OVER (PARTITION BY dept_id ORDER BY salary DESC) AS dept_salary_rank.",
+    solution: "SELECT dept_id, name, salary, DENSE_RANK() OVER (PARTITION BY dept_id ORDER BY salary DESC) AS dept_salary_rank FROM employees ORDER BY dept_id ASC, salary DESC;",
+    difficulty: "hard"
+  },
+  {
+    id: "sql-subquery-all-53",
+    chapter: 15,
+    topic: "Subqueries & Views",
+    title: "Products Priced Above All Furniture",
+    prompt: "Find the `product_name` and `price` of all products that are more expensive than ALL products in the 'Furniture' category. Use a subquery to find the prices of Furniture products.",
+    starterCode: "-- Find products more expensive than all furniture items\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 2, msg: "Exactly 2 products (Laptop and Monitor) must be returned" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 'Laptop') && result[0].values.some(row => row[0] === 'Monitor'), msg: "Result must include Laptop and Monitor" },
+      { rule: (result) => result && !result[0].values.some(row => row[0] === 'Office Chair'), msg: "Office Chair should not be returned as it is not more expensive than itself" }
+    ],
+    hint: "Use price > (SELECT MAX(price) FROM products WHERE category = 'Furniture').",
+    solution: "SELECT product_name, price FROM products WHERE price > (SELECT MAX(price) FROM products WHERE category = 'Furniture');",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-self-join-managers-54",
+    chapter: 17,
+    topic: "Self Joins",
+    title: "Find Employee Managers",
+    prompt: "For all employees whose departments have a manager assigned, retrieve their name as `employee_name`, their `dept_name`, and their manager's name as `manager_name`. You will need to join `employees` to `departments`, and then join `departments` back to `employees` as a self-join to retrieve the manager's name.",
+    starterCode: "-- Self join to find managers\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 7, msg: "Exactly 7 employees belong to departments with assigned managers" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 'Bob Jones' && row[2] === 'Alice Smith'), msg: "Bob Jones's manager must be Alice Smith" },
+      { rule: (result) => result && result[0].values.some(row => row[0] === 'Emma White' && row[2] === 'Charlie Brown'), msg: "Emma White's manager must be Charlie Brown" }
+    ],
+    hint: "Join employees e with departments d on e.dept_id = d.dept_id, and then join departments d with employees m on d.manager_id = m.emp_id.",
+    solution: "SELECT e.name AS employee_name, d.dept_name, m.name AS manager_name FROM employees e INNER JOIN departments d ON e.dept_id = d.dept_id INNER JOIN employees m ON d.manager_id = m.emp_id;",
+    difficulty: "medium"
+  },
+  {
+    id: "sql-coalesce-default-names-55",
+    chapter: 8,
+    topic: "NULL Handling",
+    title: "Department Manager ID Fallback",
+    prompt: "For each department in the `departments` table, retrieve the `dept_name` and the `manager_id`. If the department doesn't have a manager (`manager_id` is `NULL`), return `-1` instead. Alias this column as `assigned_manager` and sort the output by `dept_name` alphabetically.",
+    starterCode: "-- Use COALESCE to provide a manager ID fallback\n",
+    checks: [
+      { rule: (result) => result && result.length > 0, msg: "Query must return a result" },
+      { rule: (result) => result && result[0].values.length === 5, msg: "Must return all 5 departments" },
+      { rule: (result) => result && result[0].values[1][0] === 'Finance' && result[0].values[1][1] === -1, msg: "Finance department must have an assigned_manager of -1" },
+      { rule: (result) => result && result[0].columns.includes('assigned_manager'), msg: "Result column must be named 'assigned_manager'" }
+    ],
+    hint: "Use COALESCE(manager_id, -1) AS assigned_manager and ORDER BY dept_name ASC.",
+    solution: "SELECT dept_name, COALESCE(manager_id, -1) AS assigned_manager FROM departments ORDER BY dept_name ASC;",
+    difficulty: "easy"
   }
 ];
 
