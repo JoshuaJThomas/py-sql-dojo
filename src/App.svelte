@@ -78,8 +78,8 @@
   let activePyIdx = $derived($pythonChallengeIndex);
   let activeSqlIdx = $derived($sqlChallengeIndex);
 
-  let activePyChallenge = $derived(pythonExercises[activePyIdx]);
-  let activeSqlChallenge = $derived(sqlExercises[activeSqlIdx]);
+  let activePyChallenge = $derived(pythonExercises[activePyIdx] || pythonExercises[0]);
+  let activeSqlChallenge = $derived(sqlExercises[activeSqlIdx] || sqlExercises[0]);
 
   let currentChallenge = $derived(
     isSandboxMode
@@ -116,11 +116,13 @@
   // Watch for challenge/language updates and update code state
   $effect(() => {
     if (isSandboxMode) {
-      code = localStorage.getItem(`dojo_sandbox_code_${activeLang}`) || currentChallenge.starterCode;
+      code = localStorage.getItem(`dojo_sandbox_code_${activeLang}`) || currentChallenge?.starterCode || '';
     } else if (activeLang === 'python') {
-      code = $userPythonCode[activePyChallenge.id] || activePyChallenge.starterCode;
+      const id = activePyChallenge?.id;
+      code = id ? ($userPythonCode[id] || activePyChallenge?.starterCode || '') : '';
     } else {
-      code = $userSqlCode[activeSqlChallenge.id] || activeSqlChallenge.starterCode;
+      const id = activeSqlChallenge?.id;
+      code = id ? ($userSqlCode[id] || activeSqlChallenge?.starterCode || '') : '';
     }
   });
 
@@ -948,105 +950,115 @@
       recordSandboxRun(activeLang, code);
     }
 
-    if (activeLang === 'python') {
-      const oldLevel = get(level);
-      const outcome = await runPythonCode(currentChallenge.prelude, code, currentChallenge.checks);
-      const endTime = performance.now();
-      pyResult = { ...outcome, executionTime: endTime - startTime, executedCode: code };
+    try {
+      if (activeLang === 'python') {
+        const oldLevel = get(level);
+        const outcome = await runPythonCode(currentChallenge?.prelude, code, currentChallenge?.checks);
+        const endTime = performance.now();
+        pyResult = { ...outcome, executionTime: endTime - startTime, executedCode: code };
 
-      if (!isSandboxMode && outcome.success && outcome.checksPassed) {
-        consecutiveFailures = 0;
-        const newlyUnlocked = completeChallenge(currentChallenge.id, currentChallenge.difficulty);
-        if (newlyUnlocked && newlyUnlocked.length > 0) {
-          showBadgeUnlockNotification(newlyUnlocked);
-        }
-        const newLevel = get(level);
-        if (newLevel > oldLevel) {
-          playLevelUpFanfare();
-          levelUpVal = newLevel;
-          showLevelUpModal = true;
-        } else if (!newlyUnlocked || newlyUnlocked.length === 0) {
-          playSuccessChime();
-        }
-        triggerConfetti();
-      } else if (!isSandboxMode && (!outcome.success || !outcome.checksPassed)) {
-        consecutiveFailures += 1;
-        playErrorBuzz();
-      } else if (isSandboxMode) {
-        if (outcome.success) {
-          playSuccessChime();
-        } else {
+        if (!isSandboxMode && outcome.success && outcome.checksPassed) {
+          consecutiveFailures = 0;
+          const newlyUnlocked = completeChallenge(currentChallenge.id, currentChallenge.difficulty);
+          if (newlyUnlocked && newlyUnlocked.length > 0) {
+            showBadgeUnlockNotification(newlyUnlocked);
+          }
+          const newLevel = get(level);
+          if (newLevel > oldLevel) {
+            playLevelUpFanfare();
+            levelUpVal = newLevel;
+            showLevelUpModal = true;
+          } else if (!newlyUnlocked || newlyUnlocked.length === 0) {
+            playSuccessChime();
+          }
+          triggerConfetti();
+        } else if (!isSandboxMode && (!outcome.success || !outcome.checksPassed)) {
+          consecutiveFailures += 1;
           playErrorBuzz();
-        }
-      }
-    } else {
-      const seedToUse = (isSandboxMode && customDdlSeed.trim()) ? customDdlSeed : sqlDbSeed;
-      const outcome = await runSqlQuery(seedToUse, code);
-      const endTime = performance.now();
-
-      // Evaluate the custom SQL checks array
-      let allChecksPassed = true;
-      const checksResults = [];
-      
-      if (outcome.success) {
-        for (const check of currentChallenge.checks) {
-          let passed = false;
-          try {
-            passed = check.rule(outcome.result);
-          } catch (e) {
-            passed = false;
+        } else if (isSandboxMode) {
+          if (outcome.success) {
+            playSuccessChime();
+          } else {
+            playErrorBuzz();
           }
-          
-          let enrichment = {};
-          if (!passed) {
-            enrichment = enrichSqlCheckResult(check, outcome.result);
-          }
-          checksResults.push({ passed, msg: check.msg, ...enrichment });
-          if (!passed) allChecksPassed = false;
         }
       } else {
-        allChecksPassed = false;
-        checksResults.push({ passed: false, msg: "Database query execution failed." });
-      }
+        const seedToUse = (isSandboxMode && customDdlSeed.trim()) ? customDdlSeed : sqlDbSeed;
+        const outcome = await runSqlQuery(seedToUse, code);
+        const endTime = performance.now();
 
-      sqlResult = { 
-        ...outcome, 
-        executionTime: endTime - startTime, 
-        executedCode: code,
-        checksPassed: allChecksPassed, 
-        checksResults: checksResults 
-      };
-
-      if (!isSandboxMode && allChecksPassed) {
-        consecutiveFailures = 0;
-        const oldLevel = get(level);
-        const newlyUnlocked = completeChallenge(currentChallenge.id, currentChallenge.difficulty);
-        if (newlyUnlocked && newlyUnlocked.length > 0) {
-          showBadgeUnlockNotification(newlyUnlocked);
-        }
-        const newLevel = get(level);
-        if (newLevel > oldLevel) {
-          playLevelUpFanfare();
-          levelUpVal = newLevel;
-          showLevelUpModal = true;
-        } else if (!newlyUnlocked || newlyUnlocked.length === 0) {
-          playSuccessChime();
-        }
-        triggerConfetti();
-      } else if (!isSandboxMode && !allChecksPassed) {
-        consecutiveFailures += 1;
-        playErrorBuzz();
-      } else if (isSandboxMode) {
+        // Evaluate the custom SQL checks array
+        let allChecksPassed = true;
+        const checksResults = [];
+        
         if (outcome.success) {
-          playSuccessChime();
+          const checks = currentChallenge?.checks || [];
+          for (const check of checks) {
+            let passed = false;
+            try {
+              passed = check.rule(outcome.result);
+            } catch (e) {
+              passed = false;
+            }
+            
+            let enrichment = {};
+            if (!passed) {
+              enrichment = enrichSqlCheckResult(check, outcome.result);
+            }
+            checksResults.push({ passed, msg: check.msg, ...enrichment });
+            if (!passed) allChecksPassed = false;
+          }
         } else {
+          allChecksPassed = false;
+          checksResults.push({ passed: false, msg: "Database query execution failed." });
+        }
+
+        sqlResult = { 
+          ...outcome, 
+          executionTime: endTime - startTime, 
+          executedCode: code,
+          checksPassed: allChecksPassed, 
+          checksResults: checksResults 
+        };
+
+        if (!isSandboxMode && allChecksPassed) {
+          consecutiveFailures = 0;
+          const oldLevel = get(level);
+          const newlyUnlocked = completeChallenge(currentChallenge.id, currentChallenge.difficulty);
+          if (newlyUnlocked && newlyUnlocked.length > 0) {
+            showBadgeUnlockNotification(newlyUnlocked);
+          }
+          const newLevel = get(level);
+          if (newLevel > oldLevel) {
+            playLevelUpFanfare();
+            levelUpVal = newLevel;
+            showLevelUpModal = true;
+          } else if (!newlyUnlocked || newlyUnlocked.length === 0) {
+            playSuccessChime();
+          }
+          triggerConfetti();
+        } else if (!isSandboxMode && !allChecksPassed) {
+          consecutiveFailures += 1;
           playErrorBuzz();
+        } else if (isSandboxMode) {
+          if (outcome.success) {
+            playSuccessChime();
+          } else {
+            playErrorBuzz();
+          }
         }
       }
+    } catch (e) {
+      console.error("Dojo execution error:", e);
+      if (activeLang === 'python') {
+        pyResult = { success: false, stdout: '', error: e.message, checksPassed: false, checksResults: [], executionTime: 0, executedCode: code };
+      } else {
+        sqlResult = { success: false, result: null, error: e.message, schema: {}, dbState: {}, checksPassed: false, checksResults: [], executionTime: 0, executedCode: code };
+      }
+    } finally {
+      isRunning = false;
+      activeTabRight = 'console';
     }
-
-    isRunning = false;
-    activeTabRight = 'console';
   }
 
   // System notification toast helper
@@ -1322,7 +1334,17 @@
 
   {#if activeView === 'dashboard'}
     <main class="main-content">
-      <Dashboard onOpenSandbox={() => { isSandboxMode = true; activeView = 'playground'; hasRun = false; showHint = false; showSolution = false; }} />
+      <Dashboard 
+        onOpenSandbox={() => { isSandboxMode = true; activeView = 'playground'; hasRun = false; showHint = false; showSolution = false; }} 
+        onTrainChallenge={(id, lang) => {
+          activeView = 'playground';
+          isSandboxMode = false;
+          showHint = false;
+          showSolution = false;
+          hasRun = false;
+          activeTabRight = lang === 'sql' ? 'schema' : 'console';
+        }}
+      />
     </main>
   {:else}
     <!-- Playground View -->
